@@ -1,6 +1,6 @@
 from datetime import datetime, date, timedelta
 from typing import List, Dict, Any, Set, Tuple
-from .database import get_db_connection
+from .database import get_db_connection, convert_query_for_engine
 
 def parse_date(date_str: str) -> date:
     return datetime.strptime(date_str, "%Y-%m-%d").date()
@@ -11,7 +11,7 @@ def get_holidays_set() -> Set[str]:
     cursor.execute("SELECT date FROM holidays")
     rows = cursor.fetchall()
     conn.close()
-    return {row["date"] for row in rows}
+    return {row["date"] if isinstance(row, dict) or hasattr(row, 'keys') else row[0] for row in rows}
 
 def calculate_business_days(start_date_str: str, end_date_str: str) -> int:
     """Calcula os dias úteis entre duas datas excluindo fins de semana e feriados."""
@@ -29,7 +29,6 @@ def calculate_business_days(start_date_str: str, end_date_str: str) -> int:
     business_days = 0
 
     while current <= end_date:
-        # 5 = Sábado, 6 = Domingo
         iso_str = current.strftime("%Y-%m-%d")
         if current.weekday() < 5 and iso_str not in holidays:
             business_days += 1
@@ -44,48 +43,52 @@ def get_user_balances(user_id: int, year: int = None) -> Dict[str, Any]:
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+    cursor.execute(convert_query_for_engine("SELECT * FROM users WHERE id = ?"), (user_id,))
     user = cursor.fetchone()
     if not user:
         conn.close()
         return {}
 
-    total_entitlement = user["total_vacation_days"]
+    user_dict = dict(user)
+    total_entitlement = user_dict.get("total_vacation_days", 22)
+    year_prefix = f"{year}%"
 
-    # Férias aprovadas no ano
-    cursor.execute("""
+    # Férias aprovadas no ano (apenas 'aprovado' debita o saldo)
+    cursor.execute(convert_query_for_engine("""
     SELECT SUM(business_days) as approved_days
     FROM leave_requests
     WHERE user_id = ? AND status = 'aprovado' AND type = 'ferias'
-      AND (strftime('%Y', start_date) = ? OR strftime('%Y', end_date) = ?)
-    """, (user_id, str(year), str(year)))
-    approved_vacation = cursor.fetchone()["approved_days"] or 0
+      AND (start_date LIKE ? OR end_date LIKE ?)
+    """), (user_id, year_prefix, year_prefix))
+    row_approved = cursor.fetchone()
+    approved_vacation = dict(row_approved).get("approved_days") or 0 if row_approved else 0
 
-    # Férias pendentes no ano
-    cursor.execute("""
+    # Férias pendentes no ano (inclui pendente e cancelamento_pendente)
+    cursor.execute(convert_query_for_engine("""
     SELECT SUM(business_days) as pending_days
     FROM leave_requests
     WHERE user_id = ? AND status = 'pendente' AND type = 'ferias'
-      AND (strftime('%Y', start_date) = ? OR strftime('%Y', end_date) = ?)
-    """, (user_id, str(year), str(year)))
-    pending_vacation = cursor.fetchone()["pending_days"] or 0
+      AND (start_date LIKE ? OR end_date LIKE ?)
+    """), (user_id, year_prefix, year_prefix))
+    row_pending = cursor.fetchone()
+    pending_vacation = dict(row_pending).get("pending_days") or 0 if row_pending else 0
 
-    # Outras ausências aprovadas (baixas, parental, etc.)
-    cursor.execute("""
+    # Outras ausências aprovadas
+    cursor.execute(convert_query_for_engine("""
     SELECT type, SUM(business_days) as days
     FROM leave_requests
     WHERE user_id = ? AND status = 'aprovado' AND type != 'ferias'
-      AND (strftime('%Y', start_date) = ? OR strftime('%Y', end_date) = ?)
+      AND (start_date LIKE ? OR end_date LIKE ?)
     GROUP BY type
-    """, (user_id, str(year), str(year)))
-    other_leaves = {row["type"]: row["days"] for row in cursor.fetchall()}
+    """), (user_id, year_prefix, year_prefix))
+    other_leaves = {dict(r)["type"]: dict(r)["days"] for r in cursor.fetchall()}
 
     remaining_vacation = max(0, total_entitlement - approved_vacation)
 
     conn.close()
     return {
         "user_id": user_id,
-        "name": user["name"],
+        "name": user_dict.get("name"),
         "year": year,
         "total_days": total_entitlement,
         "approved_days": approved_vacation,
@@ -95,18 +98,20 @@ def get_user_balances(user_id: int, year: int = None) -> Dict[str, Any]:
     }
 
 def detect_conflicts(user_id: int, start_date_str: str, end_date_str: str, exclude_request_id: int = None) -> List[Dict[str, Any]]:
-    """Deteta sobreposição de pedidos de colegas do mesmo departamento."""
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Obter departamento do utilizador
-    cursor.execute("SELECT department_id, name FROM users WHERE id = ?", (user_id,))
+    cursor.execute(convert_query_for_engine("SELECT department_id, name FROM users WHERE id = ?"), (user_id,))
     user = cursor.fetchone()
-    if not user or not user["department_id"]:
+    if not user:
         conn.close()
         return []
 
-    dept_id = user["department_id"]
+    user_dict = dict(user)
+    dept_id = user_dict.get("department_id")
+    if not dept_id:
+        conn.close()
+        return []
 
     query = """
     SELECT lr.id, lr.start_date, lr.end_date, lr.type, lr.status, u.id as user_id, u.name as user_name, u.job_title, d.name as dept_name
@@ -115,7 +120,7 @@ def detect_conflicts(user_id: int, start_date_str: str, end_date_str: str, exclu
     JOIN departments d ON u.department_id = d.id
     WHERE u.department_id = ?
       AND u.id != ?
-      AND lr.status IN ('aprovado', 'pendente')
+      AND lr.status IN ('aprovado', 'pendente', 'cancelamento_pendente')
       AND (
         (lr.start_date <= ? AND lr.end_date >= ?) OR
         (lr.start_date >= ? AND lr.start_date <= ?) OR
@@ -128,7 +133,7 @@ def detect_conflicts(user_id: int, start_date_str: str, end_date_str: str, exclu
         query += " AND lr.id != ?"
         params.append(exclude_request_id)
 
-    cursor.execute(query, params)
+    cursor.execute(convert_query_for_engine(query), params)
     conflicts = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return conflicts
@@ -138,54 +143,54 @@ def get_dashboard_stats(current_user_id: int, role: str, department_id: int = No
     cursor = conn.cursor()
     today_str = date.today().strftime("%Y-%m-%d")
 
-    # Contagem de colaboradores
-    cursor.execute("SELECT COUNT(*) as total FROM users WHERE is_active = 1")
-    total_users = cursor.fetchone()["total"]
+    cursor.execute("SELECT COUNT(*) as total FROM users WHERE is_active = TRUE OR is_active = 1")
+    row_t = cursor.fetchone()
+    total_users = dict(row_t).get("total", 0) if row_t else 0
 
     # Ausentes hoje
-    cursor.execute("""
+    cursor.execute(convert_query_for_engine("""
     SELECT lr.*, u.name as user_name, u.avatar_color, d.name as dept_name
     FROM leave_requests lr
     JOIN users u ON lr.user_id = u.id
     JOIN departments d ON u.department_id = d.id
     WHERE lr.status = 'aprovado'
       AND lr.start_date <= ? AND lr.end_date >= ?
-    """, (today_str, today_str))
+    """), (today_str, today_str))
     absent_today = [dict(row) for row in cursor.fetchall()]
 
-    # Pedidos pendentes de aprovação (filtrados por papel)
+    # Pedidos a aguardar aprovação (novos pedidos 'pendente' ou pedidos de anulação 'cancelamento_pendente')
     if role == 'admin':
         cursor.execute("""
         SELECT lr.*, u.name as user_name, u.avatar_color, u.job_title, d.name as dept_name
         FROM leave_requests lr
         JOIN users u ON lr.user_id = u.id
         JOIN departments d ON u.department_id = d.id
-        WHERE lr.status = 'pendente'
+        WHERE lr.status IN ('pendente', 'cancelamento_pendente')
         ORDER BY lr.created_at ASC
         """)
     elif role == 'gestor' and department_id:
-        cursor.execute("""
+        cursor.execute(convert_query_for_engine("""
         SELECT lr.*, u.name as user_name, u.avatar_color, u.job_title, d.name as dept_name
         FROM leave_requests lr
         JOIN users u ON lr.user_id = u.id
         JOIN departments d ON u.department_id = d.id
-        WHERE lr.status = 'pendente' AND u.department_id = ?
+        WHERE lr.status IN ('pendente', 'cancelamento_pendente') AND u.department_id = ?
         ORDER BY lr.created_at ASC
-        """, (department_id,))
+        """), (department_id,))
     else:
-        cursor.execute("""
+        cursor.execute(convert_query_for_engine("""
         SELECT lr.*, u.name as user_name, u.avatar_color, u.job_title, d.name as dept_name
         FROM leave_requests lr
         JOIN users u ON lr.user_id = u.id
         JOIN departments d ON u.department_id = d.id
-        WHERE lr.status = 'pendente' AND lr.user_id = ?
+        WHERE lr.status IN ('pendente', 'cancelamento_pendente') AND lr.user_id = ?
         ORDER BY lr.created_at ASC
-        """, (current_user_id,))
+        """), (current_user_id,))
     pending_requests = [dict(row) for row in cursor.fetchall()]
 
-    # Próximas ausências nos próximos 30 dias
+    # Próximas ausências
     next_month_str = (date.today() + timedelta(days=30)).strftime("%Y-%m-%d")
-    cursor.execute("""
+    cursor.execute(convert_query_for_engine("""
     SELECT lr.*, u.name as user_name, u.avatar_color, d.name as dept_name
     FROM leave_requests lr
     JOIN users u ON lr.user_id = u.id
@@ -194,13 +199,12 @@ def get_dashboard_stats(current_user_id: int, role: str, department_id: int = No
       AND lr.start_date >= ? AND lr.start_date <= ?
     ORDER BY lr.start_date ASC
     LIMIT 10
-    """, (today_str, next_month_str))
+    """), (today_str, next_month_str))
     upcoming_leaves = [dict(row) for row in cursor.fetchall()]
 
     conn.close()
 
-    # Obter balanço do utilizador atual
-    user_balance = get_user_balances(current_user_id)
+    user_balance = get_user_balances(current_user_id) if current_user_id else None
 
     return {
         "total_users": total_users,
@@ -234,7 +238,8 @@ def generate_csv_report() -> str:
     writer = csv.writer(output, delimiter=';')
     writer.writerow(["ID", "Colaborador", "Email", "Departamento", "Tipo", "Data Início", "Data Fim", "Dias Úteis", "Estado", "Motivo", "Nota Gestor", "Data Pedido"])
 
-    for row in rows:
+    for r in rows:
+        row = dict(r)
         writer.writerow([
             row["id"], row["colaborador"], row["email"], row["departamento"],
             row["tipo"], row["data_inicio"], row["data_fim"], row["dias_uteis"],
@@ -265,9 +270,9 @@ def generate_ical_feed() -> str:
         "X-WR-CALNAME:Mapa de Férias da Equipa"
     ]
 
-    for item in leaves:
+    for it in leaves:
+        item = dict(it)
         start_fmt = item["start_date"].replace("-", "")
-        # iCal end date para eventos de dia inteiro é exclusivo (+1 dia)
         try:
             end_dt = parse_date(item["end_date"]) + timedelta(days=1)
             end_fmt = end_dt.strftime("%Y%m%d")

@@ -60,381 +60,497 @@
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col antialiased" x-data="vacationApp()" x-init="initApp()" x-cloak>
 
-  <!-- Top Navigation Bar -->
-  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="flex justify-between items-center h-16">
+  <!-- ========================================== -->
+  <!-- 🔒 ECRÃ DE LOGIN OBRIGATÓRIO (QUANDO DESLOGADO) -->
+  <!-- ========================================== -->
+  <div x-show="!currentUser && !loadingApp" class="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+    <div class="max-w-md w-full bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-800">
+      
+      <!-- Cabeçalho do Login -->
+      <div class="bg-gradient-to-tr from-blue-600 to-indigo-600 p-8 text-white text-center">
+        <div class="w-16 h-16 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg">
+          <i data-lucide="palmtree" class="w-8 h-8"></i>
+        </div>
+        <h2 class="text-2xl font-black tracking-tight">TeamVacay</h2>
+        <p class="text-xs text-blue-100 mt-1">Portal de Gestão de Férias da Equipa</p>
+      </div>
+
+      <!-- Formulário de Login -->
+      <form @submit.prevent="performLogin()" class="p-8 space-y-5">
         
-        <!-- Logo & Brand -->
-        <div class="flex items-center gap-3">
-          <div class="bg-gradient-to-tr from-blue-600 to-indigo-600 p-2.5 rounded-xl text-white shadow-md shadow-blue-500/20">
-            <i data-lucide="palmtree" class="w-6 h-6"></i>
-          </div>
-          <div>
-            <div class="flex items-center gap-2">
-              <span class="font-black text-xl tracking-tight text-slate-900">TeamVacay</span>
-              <span class="text-xs bg-blue-100 text-blue-700 font-semibold px-2 py-0.5 rounded-full">v2.0</span>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Email Profissional</label>
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+              <i data-lucide="mail" class="w-4 h-4"></i>
             </div>
-            <p class="text-xs text-slate-500 hidden sm:block">Gestão de Férias & Ausências da Equipa</p>
+            <input type="email" x-model="loginForm.email" placeholder="ex: ana.silva@empresa.pt" required
+                   class="w-full text-xs font-medium pl-10 pr-3 py-3 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition">
           </div>
         </div>
 
-        <!-- Right Side: New Request CTA & User Profile / Login -->
-        <div class="flex items-center gap-3">
-          
-          <button @click="openNewRequestModal()" class="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg shadow-sm shadow-blue-500/30 transition">
-            <i data-lucide="plus-circle" class="w-4 h-4"></i>
-            <span class="hidden sm:inline">Novo Pedido</span>
-          </button>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Palavra-passe</label>
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+              <i data-lucide="lock" class="w-4 h-4"></i>
+            </div>
+            <input type="password" x-model="loginForm.password" placeholder="Palavra-passe (predefinida: 1234)" required
+                   class="w-full text-xs font-medium pl-10 pr-3 py-3 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition font-mono">
+          </div>
+        </div>
 
-          <!-- User Profile & Persona Switcher -->
-          <div class="relative" x-data="{ openDropdown: false }">
-            <button @click="openDropdown = !openDropdown" class="flex items-center gap-2.5 p-1.5 pr-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition">
-              <div class="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-xs shadow-sm" :style="'background-color: ' + (currentUser?.avatar_color || '#3B82F6')">
-                <span x-text="getInitials(currentUser?.name)"></span>
+        <div x-show="loginError" class="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold flex items-center gap-2">
+          <i data-lucide="alert-circle" class="w-4 h-4 shrink-0"></i>
+          <span x-text="loginError"></span>
+        </div>
+
+        <button type="submit" :disabled="loggingIn"
+                class="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-lg shadow-blue-500/30 transition flex items-center justify-center gap-2">
+          <span x-show="!loggingIn">Entrar na Minha Conta</span>
+          <span x-show="loggingIn">A verificar credenciais...</span>
+          <i x-show="!loggingIn" data-lucide="arrow-right" class="w-4 h-4"></i>
+        </button>
+
+        <!-- Informação de Contas de Demonstração -->
+        <div class="pt-4 border-t border-slate-100 text-center">
+          <p class="text-[11px] text-slate-400 font-medium">Contas iniciais de demonstração (senha: <code class="font-bold text-slate-600">1234</code>):</p>
+          <div class="mt-2 flex flex-wrap justify-center gap-1 text-[10px]">
+            <button type="button" @click="loginForm.email = 'sofia.rh@empresa.pt'; loginForm.password = '1234'" class="bg-purple-50 text-purple-700 hover:bg-purple-100 px-2 py-0.5 rounded font-semibold transition">👑 Sofia (Admin RH)</button>
+            <button type="button" @click="loginForm.email = 'carlos.mendes@empresa.pt'; loginForm.password = '1234'" class="bg-blue-50 text-blue-700 hover:bg-blue-100 px-2 py-0.5 rounded font-semibold transition">💼 Carlos (Gestor)</button>
+            <button type="button" @click="loginForm.email = 'ana.silva@empresa.pt'; loginForm.password = '1234'" class="bg-slate-100 text-slate-700 hover:bg-slate-200 px-2 py-0.5 rounded font-semibold transition">👤 Ana (Colaboradora)</button>
+          </div>
+        </div>
+
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- 🌟 APLICAÇÃO PRINCIPAL (QUANDO AUTENTICADO) -->
+  <!-- ========================================== -->
+  <div x-show="currentUser" class="flex-1 flex flex-col">
+
+    <!-- Top Navigation Bar -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between items-center h-16">
+          
+          <!-- Logo & Brand -->
+          <div class="flex items-center gap-3">
+            <div class="bg-gradient-to-tr from-blue-600 to-indigo-600 p-2.5 rounded-xl text-white shadow-md shadow-blue-500/20">
+              <i data-lucide="palmtree" class="w-6 h-6"></i>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="font-black text-xl tracking-tight text-slate-900">TeamVacay</span>
+                <span class="text-xs bg-blue-100 text-blue-700 font-semibold px-2 py-0.5 rounded-full">v2.0</span>
               </div>
-              <div class="text-left hidden md:block">
-                <div class="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                  <span x-text="currentUser?.name"></span>
-                  <span class="text-[10px] uppercase font-extrabold px-1.5 py-0.2 rounded"
-                    :class="{
-                      'bg-purple-100 text-purple-700': currentUser?.role === 'admin',
-                      'bg-blue-100 text-blue-700': currentUser?.role === 'gestor',
-                      'bg-slate-200 text-slate-700': currentUser?.role === 'colaborador'
-                    }"
-                    x-text="currentUser?.role">
-                  </span>
-                </div>
-                <div class="text-[11px] text-slate-500" x-text="currentUser?.job_title || currentUser?.department_name"></div>
-              </div>
-              <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400"></i>
+              <p class="text-xs text-slate-500 hidden sm:block">Gestão de Férias & Ausências da Equipa</p>
+            </div>
+          </div>
+
+          <!-- Right Side: New Request CTA & User Profile / Logout -->
+          <div class="flex items-center gap-3">
+            
+            <button @click="openNewRequestModal()" class="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg shadow-sm shadow-blue-500/30 transition">
+              <i data-lucide="plus-circle" class="w-4 h-4"></i>
+              <span class="hidden sm:inline">Novo Pedido</span>
             </button>
 
-            <!-- Dropdown: Fast User Switcher & Credentials -->
-            <div x-show="openDropdown" @click.away="openDropdown = false" class="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-slate-200 py-2 z-50">
-              <div class="px-4 py-2 border-b border-slate-100">
-                <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Alternar Utilizador / Papel</p>
-                <p class="text-xs text-slate-500 mt-0.5">Clique para simular qualquer colaborador:</p>
-              </div>
+            <!-- User Profile & Logout Dropdown -->
+            <div class="relative" x-data="{ openDropdown: false }">
+              <button @click="openDropdown = !openDropdown" class="flex items-center gap-2.5 p-1.5 pr-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition">
+                <div class="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-xs shadow-sm" :style="'background-color: ' + (currentUser?.avatar_color || '#3B82F6')">
+                  <span x-text="getInitials(currentUser?.name)"></span>
+                </div>
+                <div class="text-left hidden md:block">
+                  <div class="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                    <span x-text="currentUser?.name"></span>
+                    <span class="text-[10px] uppercase font-extrabold px-1.5 py-0.2 rounded"
+                      :class="{
+                        'bg-purple-100 text-purple-700': currentUser?.role === 'admin',
+                        'bg-blue-100 text-blue-700': currentUser?.role === 'gestor',
+                        'bg-slate-200 text-slate-700': currentUser?.role === 'colaborador'
+                      }"
+                      x-text="currentUser?.role">
+                    </span>
+                  </div>
+                  <div class="text-[11px] text-slate-500" x-text="currentUser?.job_title || currentUser?.department_name"></div>
+                </div>
+                <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400"></i>
+              </button>
 
-              <div class="max-h-60 overflow-y-auto py-1 divide-y divide-slate-50">
-                <template x-for="u in users" :key="u.id">
-                  <button @click="switchUser(u.id); openDropdown = false" class="w-full text-left px-4 py-2.5 flex items-center justify-between hover:bg-slate-50 transition" :class="{'bg-blue-50/70': currentUser?.id === u.id}">
-                    <div class="flex items-center gap-2.5">
-                      <div class="w-7 h-7 rounded-lg flex items-center justify-center text-white font-bold text-xs" :style="'background-color: ' + (u.avatar_color || '#3b82f6')">
-                        <span x-text="getInitials(u.name)"></span>
-                      </div>
-                      <div>
-                        <div class="text-xs font-semibold text-slate-800" x-text="u.name"></div>
-                        <div class="text-[11px] text-slate-500" x-text="u.job_title || u.department_name"></div>
-                      </div>
-                    </div>
-                    <div class="flex items-center gap-1">
-                      <span class="text-[10px] font-bold px-1.5 py-0.5 rounded capitalize"
-                        :class="{
-                          'bg-purple-100 text-purple-700': u.role === 'admin',
-                          'bg-blue-100 text-blue-700': u.role === 'gestor',
-                          'bg-slate-100 text-slate-600': u.role === 'colaborador'
-                        }"
-                        x-text="u.role">
-                      </span>
-                      <i x-show="currentUser?.id === u.id" data-lucide="check" class="w-3.5 h-3.5 text-blue-600"></i>
-                    </div>
-                  </button>
-                </template>
-              </div>
+              <!-- Dropdown Menu -->
+              <div x-show="openDropdown" @click.away="openDropdown = false" class="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50">
+                <div class="px-4 py-3 border-b border-slate-100">
+                  <p class="text-xs font-bold text-slate-900" x-text="currentUser?.name"></p>
+                  <p class="text-[11px] text-slate-500" x-text="currentUser?.email"></p>
+                  <div class="mt-2 text-[11px] bg-blue-50 text-blue-700 p-2 rounded-lg font-medium flex justify-between">
+                    <span>Saldo disponível:</span>
+                    <strong x-text="(currentUser?.balances?.remaining_days ?? 22) + ' dias'"></strong>
+                  </div>
+                </div>
 
-              <div class="p-2 border-t border-slate-100 bg-slate-50 rounded-b-xl flex justify-between items-center text-xs">
-                <button @click="openLoginModal = true; openDropdown = false" class="text-slate-600 hover:text-slate-900 font-semibold flex items-center gap-1">
-                  <i data-lucide="log-in" class="w-3.5 h-3.5"></i>
-                  Ecrã de Login
-                </button>
-                <template x-if="currentUser?.role === 'admin'">
-                  <button @click="openNewUserModal(); openDropdown = false" class="text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1">
-                    <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
-                    + Novo
+                <div class="p-2">
+                  <button @click="performLogout(); openDropdown = false" class="w-full text-left px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 rounded-xl flex items-center gap-2 transition">
+                    <i data-lucide="log-out" class="w-4 h-4"></i>
+                    Terminar Sessão (Sair)
                   </button>
-                </template>
+                </div>
               </div>
             </div>
+
           </div>
 
         </div>
 
-      </div>
-
-      <!-- Navigation Tabs -->
-      <div class="flex gap-6 overflow-x-auto border-t border-slate-100 -mb-px">
-        
-        <button @click="activeTab = 'dashboard'" class="py-3 px-1 border-b-2 text-sm font-semibold flex items-center gap-2 transition" :class="activeTab === 'dashboard' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'">
-          <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
-          <span>Visão Geral</span>
-        </button>
-
-        <button @click="activeTab = 'my_requests'" class="py-3 px-1 border-b-2 text-sm font-semibold flex items-center gap-2 transition" :class="activeTab === 'my_requests' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'">
-          <i data-lucide="calendar-check" class="w-4 h-4"></i>
-          <span>Os Meus Pedidos</span>
-          <span class="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded-full font-medium" x-text="myRequests.length"></span>
-        </button>
-
-        <!-- Tab Aprovações (apenas Gestor e Admin) -->
-        <template x-if="currentUser?.role === 'gestor' || currentUser?.role === 'admin'">
-          <button @click="activeTab = 'approvals'" class="py-3 px-1 border-b-2 text-sm font-semibold flex items-center gap-2 transition relative" :class="activeTab === 'approvals' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'">
-            <i data-lucide="shield-check" class="w-4 h-4"></i>
-            <span>Aprovações</span>
-            <span x-show="stats.pending_count > 0" class="bg-amber-500 text-white text-xs px-1.5 py-0.2 rounded-full font-bold animate-pulse" x-text="stats.pending_count"></span>
+        <!-- Navigation Tabs -->
+        <div class="flex gap-6 overflow-x-auto border-t border-slate-100 -mb-px">
+          
+          <button @click="activeTab = 'dashboard'" class="py-3 px-1 border-b-2 text-sm font-semibold flex items-center gap-2 transition" :class="activeTab === 'dashboard' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'">
+            <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+            <span>Visão Geral</span>
           </button>
-        </template>
 
-        <button @click="activeTab = 'calendar'; renderCalendarAfterTab()" class="py-3 px-1 border-b-2 text-sm font-semibold flex items-center gap-2 transition" :class="activeTab === 'calendar' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'">
-          <i data-lucide="calendar" class="w-4 h-4"></i>
-          <span>Calendário & Gantt</span>
-        </button>
-
-        <!-- Tab Gestão de Equipa & Saldos (Admin e Gestor) -->
-        <template x-if="currentUser?.role === 'gestor' || currentUser?.role === 'admin'">
-          <button @click="activeTab = 'team'" class="py-3 px-1 border-b-2 text-sm font-semibold flex items-center gap-2 transition" :class="activeTab === 'team' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'">
-            <i data-lucide="users" class="w-4 h-4"></i>
-            <span>Gestão da Equipa & Saldos</span>
-            <span x-show="currentUser?.role === 'admin'" class="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.2 rounded font-bold">Admin</span>
+          <button @click="activeTab = 'my_requests'" class="py-3 px-1 border-b-2 text-sm font-semibold flex items-center gap-2 transition" :class="activeTab === 'my_requests' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'">
+            <i data-lucide="calendar-check" class="w-4 h-4"></i>
+            <span>Os Meus Pedidos</span>
+            <span class="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded-full font-medium" x-text="myRequests.length"></span>
           </button>
-        </template>
 
-        <button @click="activeTab = 'holidays'" class="py-3 px-1 border-b-2 text-sm font-semibold flex items-center gap-2 transition" :class="activeTab === 'holidays' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'">
-          <i data-lucide="flag" class="w-4 h-4"></i>
-          <span>Feriados & Exportar</span>
-        </button>
+          <!-- Tab Aprovações (apenas Gestor e Admin) -->
+          <template x-if="currentUser?.role === 'gestor' || currentUser?.role === 'admin'">
+            <button @click="activeTab = 'approvals'" class="py-3 px-1 border-b-2 text-sm font-semibold flex items-center gap-2 transition relative" :class="activeTab === 'approvals' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'">
+              <i data-lucide="shield-check" class="w-4 h-4"></i>
+              <span>Aprovações</span>
+              <span x-show="stats.pending_count > 0" class="bg-amber-500 text-white text-xs px-1.5 py-0.2 rounded-full font-bold animate-pulse" x-text="stats.pending_count"></span>
+            </button>
+          </template>
 
-      </div>
-    </div>
-  </header>
+          <button @click="activeTab = 'calendar'; renderCalendarAfterTab()" class="py-3 px-1 border-b-2 text-sm font-semibold flex items-center gap-2 transition" :class="activeTab === 'calendar' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'">
+            <i data-lucide="calendar" class="w-4 h-4"></i>
+            <span>Calendário & Gantt</span>
+          </button>
 
-  <!-- Main Content Container -->
-  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full">
-    
-    <!-- Banner de Permissões / Contexto -->
-    <div class="mb-6 p-4 rounded-xl border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 transition"
-         :class="{
-           'bg-purple-50 border-purple-200 text-purple-900': currentUser?.role === 'admin',
-           'bg-blue-50 border-blue-200 text-blue-900': currentUser?.role === 'gestor',
-           'bg-emerald-50 border-emerald-200 text-emerald-900': currentUser?.role === 'colaborador'
-         }">
-      <div class="flex items-center gap-3">
-        <div class="p-2 rounded-lg"
-             :class="{
-               'bg-purple-200 text-purple-800': currentUser?.role === 'admin',
-               'bg-blue-200 text-blue-800': currentUser?.role === 'gestor',
-               'bg-emerald-200 text-emerald-800': currentUser?.role === 'colaborador'
-             }">
-          <i data-lucide="user-check" class="w-5 h-5"></i>
-        </div>
-        <div>
-          <p class="text-sm font-bold">
-            Sessão Ativa: <span x-text="currentUser?.name"></span>
-            <span class="font-normal opacity-80">(<span x-text="currentUser?.role"></span> no departamento <strong x-text="currentUser?.department_name"></strong>)</span>
-          </p>
-          <p class="text-xs opacity-75 mt-0.5" x-show="currentUser?.role === 'colaborador'">
-            Como <strong>Colaborador</strong>, pode criar pedidos de férias, verificar o seu saldo e consultar o mapa da equipa.
-          </p>
-          <p class="text-xs opacity-75 mt-0.5" x-show="currentUser?.role === 'gestor'">
-            Como <strong>Gestor</strong>, tem acesso a aprovações da equipa, alertas de conflito e visão da sua equipa.
-          </p>
-          <p class="text-xs opacity-75 mt-0.5" x-show="currentUser?.role === 'admin'">
-            Como <strong>Administrador / RH</strong>, tem controlo total para <strong>criar, editar e eliminar colaboradores</strong>, ajustar saldos e gerir feriados.
-          </p>
+          <!-- Tab Gestão de Equipa & Saldos (Admin e Gestor) -->
+          <template x-if="currentUser?.role === 'gestor' || currentUser?.role === 'admin'">
+            <button @click="activeTab = 'team'" class="py-3 px-1 border-b-2 text-sm font-semibold flex items-center gap-2 transition" :class="activeTab === 'team' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'">
+              <i data-lucide="users" class="w-4 h-4"></i>
+              <span>Gestão da Equipa & Saldos</span>
+            </button>
+          </template>
+
+          <button @click="activeTab = 'holidays'" class="py-3 px-1 border-b-2 text-sm font-semibold flex items-center gap-2 transition" :class="activeTab === 'holidays' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'">
+            <i data-lucide="flag" class="w-4 h-4"></i>
+            <span>Feriados & Exportar</span>
+          </button>
+
         </div>
       </div>
+    </header>
 
-      <div class="flex items-center gap-2">
-        <button @click="openNewRequestModal()" class="text-xs font-bold px-3 py-1.5 rounded-lg bg-white shadow-sm border border-slate-200 hover:bg-slate-50 transition flex items-center gap-1.5">
-          <i data-lucide="send" class="w-3.5 h-3.5"></i>
-          Submeter Pedido
-        </button>
-      </div>
-    </div>
-
-    <!-- TAB 1: DASHBOARD / VISÃO GERAL -->
-    <div x-show="activeTab === 'dashboard'" class="space-y-6">
+    <!-- Main Content Container -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full">
       
-      <!-- KPI Cards -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <!-- TAB 1: DASHBOARD / VISÃO GERAL -->
+      <div x-show="activeTab === 'dashboard'" class="space-y-6">
         
-        <!-- Cartão Saldo de Férias -->
-        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
-          <div class="flex justify-between items-start">
-            <div>
-              <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">O Meu Saldo Disponível</p>
-              <h3 class="text-3xl font-black text-slate-900 mt-1">
-                <span x-text="currentUser?.balances?.remaining_days ?? 0"></span>
-                <span class="text-sm font-normal text-slate-500">dias</span>
-              </h3>
-              <p class="text-xs text-slate-500 mt-1">
-                De <span class="font-bold text-slate-700" x-text="currentUser?.balances?.total_days ?? 22"></span> dias de direito anual
-              </p>
+        <!-- KPI Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
+            <div class="flex justify-between items-start">
+              <div>
+                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">O Meu Saldo Disponível</p>
+                <h3 class="text-3xl font-black text-slate-900 mt-1">
+                  <span x-text="currentUser?.balances?.remaining_days ?? 0"></span>
+                  <span class="text-sm font-normal text-slate-500">dias</span>
+                </h3>
+                <p class="text-xs text-slate-500 mt-1">
+                  De <span class="font-bold text-slate-700" x-text="currentUser?.balances?.total_days ?? 22"></span> dias anuais
+                </p>
+              </div>
+              <div class="p-3 bg-blue-50 text-blue-600 rounded-xl">
+                <i data-lucide="sun" class="w-6 h-6"></i>
+              </div>
             </div>
-            <div class="p-3 bg-blue-50 text-blue-600 rounded-xl">
-              <i data-lucide="sun" class="w-6 h-6"></i>
+            <div class="mt-4 w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+              <div class="bg-blue-600 h-full rounded-full transition-all duration-500"
+                   :style="'width: ' + (((currentUser?.balances?.remaining_days || 0) / (currentUser?.balances?.total_days || 22)) * 100) + '%'"></div>
+            </div>
+            <div class="mt-2 flex justify-between text-[11px] text-slate-500">
+              <span><strong class="text-emerald-600" x-text="currentUser?.balances?.approved_days ?? 0"></strong> gozados</span>
+              <span><strong class="text-amber-600" x-text="currentUser?.balances?.pending_days ?? 0"></strong> em aprovação</span>
             </div>
           </div>
-          <!-- Barra de progresso de saldo -->
-          <div class="mt-4 w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-            <div class="bg-blue-600 h-full rounded-full transition-all duration-500"
-                 :style="'width: ' + (((currentUser?.balances?.remaining_days || 0) / (currentUser?.balances?.total_days || 22)) * 100) + '%'"></div>
+
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+            <div class="flex justify-between items-start">
+              <div>
+                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Ausentes Hoje</p>
+                <h3 class="text-3xl font-black text-slate-900 mt-1">
+                  <span x-text="stats.absent_today_count"></span>
+                  <span class="text-sm font-normal text-slate-500">pessoas</span>
+                </h3>
+                <p class="text-xs text-slate-500 mt-1" x-text="stats.absent_today_count > 0 ? 'Equipa informada' : 'Toda a equipa disponível'"></p>
+              </div>
+              <div class="p-3 bg-amber-50 text-amber-600 rounded-xl">
+                <i data-lucide="clock" class="w-6 h-6"></i>
+              </div>
+            </div>
           </div>
-          <div class="mt-2 flex justify-between text-[11px] text-slate-500">
-            <span><strong class="text-emerald-600" x-text="currentUser?.balances?.approved_days ?? 0"></strong> gozados</span>
-            <span><strong class="text-amber-600" x-text="currentUser?.balances?.pending_days ?? 0"></strong> pendentes</span>
+
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+            <div class="flex justify-between items-start">
+              <div>
+                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Pedidos a Aguardar</p>
+                <h3 class="text-3xl font-black text-slate-900 mt-1">
+                  <span x-text="stats.pending_count"></span>
+                  <span class="text-sm font-normal text-slate-500">pedidos</span>
+                </h3>
+                <p class="text-xs text-slate-500 mt-1" x-show="currentUser?.role !== 'colaborador'">Novos ou cancelamentos a validar</p>
+                <p class="text-xs text-slate-500 mt-1" x-show="currentUser?.role === 'colaborador'">Os seus pedidos em análise</p>
+              </div>
+              <div class="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
+                <i data-lucide="inbox" class="w-6 h-6"></i>
+              </div>
+            </div>
           </div>
+
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+            <div class="flex justify-between items-start">
+              <div>
+                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Membros Ativos</p>
+                <h3 class="text-3xl font-black text-slate-900 mt-1">
+                  <span x-text="users.length"></span>
+                  <span class="text-sm font-normal text-slate-500">colaboradores</span>
+                </h3>
+                <p class="text-xs text-slate-500 mt-1" x-text="departments.length + ' Departamentos'"></p>
+              </div>
+              <div class="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
+                <i data-lucide="users" class="w-6 h-6"></i>
+              </div>
+            </div>
+          </div>
+
         </div>
 
-        <!-- Cartão Ausentes Hoje -->
-        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-          <div class="flex justify-between items-start">
-            <div>
-              <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Ausentes Hoje</p>
-              <h3 class="text-3xl font-black text-slate-900 mt-1">
-                <span x-text="stats.absent_today_count"></span>
-                <span class="text-sm font-normal text-slate-500">pessoas</span>
-              </h3>
-              <p class="text-xs text-slate-500 mt-1" x-text="stats.absent_today_count > 0 ? 'Equipa informada' : 'Toda a equipa disponível'"></p>
+        <!-- Duas Colunas: Ausências de Hoje + Próximas Férias -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          <!-- Ausentes Hoje -->
+          <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+            <div class="flex items-center justify-between mb-4">
+              <h4 class="font-bold text-slate-900 text-sm flex items-center gap-2">
+                <i data-lucide="user-minus" class="w-4 h-4 text-amber-500"></i>
+                Ausentes Hoje
+              </h4>
+              <span class="text-xs text-slate-400 font-medium" x-text="new Date().toLocaleDateString('pt-PT', {day:'numeric', month:'short'})"></span>
             </div>
-            <div class="p-3 bg-amber-50 text-amber-600 rounded-xl">
-              <i data-lucide="clock" class="w-6 h-6"></i>
-            </div>
-          </div>
-        </div>
 
-        <!-- Cartão Pedidos Pendentes -->
-        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-          <div class="flex justify-between items-start">
-            <div>
-              <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Pedidos a Aguardar</p>
-              <h3 class="text-3xl font-black text-slate-900 mt-1">
-                <span x-text="stats.pending_count"></span>
-                <span class="text-sm font-normal text-slate-500">pedidos</span>
-              </h3>
-              <p class="text-xs text-slate-500 mt-1" x-show="currentUser?.role !== 'colaborador'">A aguardar decisão do gestor</p>
-              <p class="text-xs text-slate-500 mt-1" x-show="currentUser?.role === 'colaborador'">Os seus pedidos em análise</p>
-            </div>
-            <div class="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
-              <i data-lucide="inbox" class="w-6 h-6"></i>
-            </div>
-          </div>
-        </div>
+            <div class="space-y-3">
+              <template x-if="stats.absent_today.length === 0">
+                <div class="text-center py-8 text-slate-400">
+                  <i data-lucide="coffee" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
+                  <p class="text-xs font-medium">Nenhum colaborador ausente hoje.</p>
+                </div>
+              </template>
 
-        <!-- Cartão Total da Equipa -->
-        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-          <div class="flex justify-between items-start">
-            <div>
-              <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Membros Ativos</p>
-              <h3 class="text-3xl font-black text-slate-900 mt-1">
-                <span x-text="users.length"></span>
-                <span class="text-sm font-normal text-slate-500">colaboradores</span>
-              </h3>
-              <p class="text-xs text-slate-500 mt-1" x-text="departments.length + ' Departamentos'"></p>
-            </div>
-            <div class="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
-              <i data-lucide="users" class="w-6 h-6"></i>
+              <template x-for="item in stats.absent_today" :key="item.id">
+                <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
+                  <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-xs" :style="'background-color: ' + (item.avatar_color || '#3b82f6')">
+                      <span x-text="getInitials(item.user_name)"></span>
+                    </div>
+                    <div>
+                      <p class="text-xs font-bold text-slate-800" x-text="item.user_name"></p>
+                      <p class="text-[11px] text-slate-500" x-text="item.dept_name"></p>
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full capitalize"
+                      :class="{
+                        'bg-blue-100 text-blue-700': item.type === 'ferias',
+                        'bg-red-100 text-red-700': item.type === 'baixa',
+                        'bg-purple-100 text-purple-700': item.type !== 'ferias' && item.type !== 'baixa'
+                      }"
+                      x-text="formatLeaveType(item.type)">
+                    </span>
+                    <p class="text-[10px] text-slate-400 mt-0.5">Até <span x-text="formatDateShort(item.end_date)"></span></p>
+                  </div>
+                </div>
+              </template>
             </div>
           </div>
+
+          <!-- Próximas Ausências na Organização -->
+          <div class="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+            <div class="flex items-center justify-between mb-4">
+              <h4 class="font-bold text-slate-900 text-sm flex items-center gap-2">
+                <i data-lucide="calendar-days" class="w-4 h-4 text-blue-600"></i>
+                Próximas Ausências Programadas (30 Dias)
+              </h4>
+              <button @click="activeTab = 'calendar'; renderCalendarAfterTab()" class="text-xs font-semibold text-blue-600 hover:text-blue-700">Ver Calendário Completo →</button>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-slate-50 text-slate-500 font-semibold border-b border-slate-100">
+                  <tr>
+                    <th class="p-3">Colaborador</th>
+                    <th class="p-3">Departamento</th>
+                    <th class="p-3">Tipo</th>
+                    <th class="p-3">Período</th>
+                    <th class="p-3">Dias Úteis</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  <template x-if="stats.upcoming_leaves.length === 0">
+                    <tr>
+                      <td colspan="5" class="p-6 text-center text-slate-400">Nenhuma ausência programada nos próximos dias.</td>
+                    </tr>
+                  </template>
+                  <template x-for="item in stats.upcoming_leaves" :key="item.id">
+                    <tr class="hover:bg-slate-50 transition">
+                      <td class="p-3 font-semibold text-slate-800 flex items-center gap-2">
+                        <div class="w-6 h-6 rounded-full flex items-center justify-center text-white font-bold text-[10px]" :style="'background-color: ' + (item.avatar_color || '#3b82f6')">
+                          <span x-text="getInitials(item.user_name)"></span>
+                        </div>
+                        <span x-text="item.user_name"></span>
+                      </td>
+                      <td class="p-3 text-slate-600" x-text="item.dept_name"></td>
+                      <td class="p-3">
+                        <span class="px-2 py-0.5 rounded-full font-semibold text-[10px] capitalize"
+                          :class="item.type === 'ferias' ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700'"
+                          x-text="formatLeaveType(item.type)">
+                        </span>
+                      </td>
+                      <td class="p-3 font-medium text-slate-700">
+                        <span x-text="formatDateRange(item.start_date, item.end_date)"></span>
+                      </td>
+                      <td class="p-3 font-bold text-slate-900" x-text="item.business_days + ' dias'"></td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
         </div>
 
       </div>
 
-      <!-- Duas Colunas: Ausências de Hoje + Próximas Férias -->
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- TAB 2: OS MEUS PEDIDOS (COM OPÇÃO DE CANCELAR) -->
+      <div x-show="activeTab === 'my_requests'" class="space-y-6">
         
-        <!-- Ausentes Hoje -->
-        <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-          <div class="flex items-center justify-between mb-4">
-            <h4 class="font-bold text-slate-900 text-sm flex items-center gap-2">
-              <i data-lucide="user-minus" class="w-4 h-4 text-amber-500"></i>
-              Ausentes Hoje
-            </h4>
-            <span class="text-xs text-slate-400 font-medium" x-text="new Date().toLocaleDateString('pt-PT', {day:'numeric', month:'short'})"></span>
+        <div class="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-6 text-white shadow-lg shadow-blue-500/20 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+          <div>
+            <div class="flex items-center gap-2 text-blue-200 text-xs font-semibold uppercase tracking-wider">
+              <i data-lucide="user" class="w-4 h-4"></i>
+              Área Pessoal de Férias
+            </div>
+            <h2 class="text-2xl font-black mt-1">Os Meus Pedidos & Saldos</h2>
+            <p class="text-blue-100 text-xs mt-1">Submeta pedidos, acompanhe o estado ou solicite o cancelamento de férias.</p>
           </div>
 
-          <div class="space-y-3">
-            <template x-if="stats.absent_today.length === 0">
-              <div class="text-center py-8 text-slate-400">
-                <i data-lucide="coffee" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
-                <p class="text-xs font-medium">Nenhum colaborador ausente hoje.</p>
-              </div>
-            </template>
-
-            <template x-for="item in stats.absent_today" :key="item.id">
-              <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
-                <div class="flex items-center gap-3">
-                  <div class="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-xs" :style="'background-color: ' + (item.avatar_color || '#3b82f6')">
-                    <span x-text="getInitials(item.user_name)"></span>
-                  </div>
-                  <div>
-                    <p class="text-xs font-bold text-slate-800" x-text="item.user_name"></p>
-                    <p class="text-[11px] text-slate-500" x-text="item.dept_name"></p>
-                  </div>
-                </div>
-                <div class="text-right">
-                  <span class="text-[10px] font-bold px-2 py-0.5 rounded-full capitalize"
-                    :class="{
-                      'bg-blue-100 text-blue-700': item.type === 'ferias',
-                      'bg-red-100 text-red-700': item.type === 'baixa',
-                      'bg-purple-100 text-purple-700': item.type !== 'ferias' && item.type !== 'baixa'
-                    }"
-                    x-text="formatLeaveType(item.type)">
-                  </span>
-                  <p class="text-[10px] text-slate-400 mt-0.5">Até <span x-text="formatDateShort(item.end_date)"></span></p>
-                </div>
-              </div>
-            </template>
+          <div class="flex items-center gap-4 bg-white/10 backdrop-blur-md p-4 rounded-xl border border-white/20">
+            <div class="text-center pr-4 border-r border-white/20">
+              <span class="text-xs text-blue-200 block">Direito Anual</span>
+              <span class="text-2xl font-black" x-text="currentUser?.balances?.total_days ?? 22"></span>
+            </div>
+            <div class="text-center pr-4 border-r border-white/20">
+              <span class="text-xs text-blue-200 block">Gozados</span>
+              <span class="text-2xl font-black text-emerald-300" x-text="currentUser?.balances?.approved_days ?? 0"></span>
+            </div>
+            <div class="text-center">
+              <span class="text-xs text-blue-200 block">Disponíveis</span>
+              <span class="text-2xl font-black text-yellow-300" x-text="currentUser?.balances?.remaining_days ?? 0"></span>
+            </div>
+            <button @click="openNewRequestModal()" class="ml-2 bg-white text-blue-700 hover:bg-blue-50 font-bold text-xs px-4 py-2.5 rounded-lg shadow transition">
+              + Novo Pedido
+            </button>
           </div>
         </div>
 
-        <!-- Próximas Ausências na Organização -->
-        <div class="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-          <div class="flex items-center justify-between mb-4">
-            <h4 class="font-bold text-slate-900 text-sm flex items-center gap-2">
-              <i data-lucide="calendar-days" class="w-4 h-4 text-blue-600"></i>
-              Próximas Ausências Programadas (30 Dias)
-            </h4>
-            <button @click="activeTab = 'calendar'; renderCalendarAfterTab()" class="text-xs font-semibold text-blue-600 hover:text-blue-700">Ver Calendário Completo →</button>
+        <!-- Tabela com os Meus Pedidos -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="p-5 border-b border-slate-100 flex justify-between items-center">
+            <h3 class="font-bold text-slate-800 text-sm">Histórico de Pedidos Pessoais</h3>
+            <button @click="loadMyRequests()" class="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Atualizar
+            </button>
           </div>
 
           <div class="overflow-x-auto">
             <table class="w-full text-left text-xs">
               <thead class="bg-slate-50 text-slate-500 font-semibold border-b border-slate-100">
                 <tr>
-                  <th class="p-3">Colaborador</th>
-                  <th class="p-3">Departamento</th>
-                  <th class="p-3">Tipo</th>
-                  <th class="p-3">Período</th>
-                  <th class="p-3">Dias Úteis</th>
+                  <th class="p-4">Tipo</th>
+                  <th class="p-4">Período</th>
+                  <th class="p-4">Dias Úteis</th>
+                  <th class="p-4">Estado</th>
+                  <th class="p-4">Motivo / Notas</th>
+                  <th class="p-4">Resposta da Gestão</th>
+                  <th class="p-4 text-right">Ação</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100">
-                <template x-if="stats.upcoming_leaves.length === 0">
+                <template x-if="myRequests.length === 0">
                   <tr>
-                    <td colspan="5" class="p-6 text-center text-slate-400">Nenhuma ausência programada nos próximos dias.</td>
+                    <td colspan="7" class="p-8 text-center text-slate-400">
+                      <i data-lucide="calendar" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
+                      Ainda não submeteu nenhum pedido de férias. Clique no botão "+ Novo Pedido" acima.
+                    </td>
                   </tr>
                 </template>
-                <template x-for="item in stats.upcoming_leaves" :key="item.id">
+                <template x-for="r in myRequests" :key="r.id">
                   <tr class="hover:bg-slate-50 transition">
-                    <td class="p-3 font-semibold text-slate-800 flex items-center gap-2">
-                      <div class="w-6 h-6 rounded-full flex items-center justify-center text-white font-bold text-[10px]" :style="'background-color: ' + (item.avatar_color || '#3b82f6')">
-                        <span x-text="getInitials(item.user_name)"></span>
-                      </div>
-                      <span x-text="item.user_name"></span>
-                    </td>
-                    <td class="p-3 text-slate-600" x-text="item.dept_name"></td>
-                    <td class="p-3">
-                      <span class="px-2 py-0.5 rounded-full font-semibold text-[10px] capitalize"
-                        :class="item.type === 'ferias' ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700'"
-                        x-text="formatLeaveType(item.type)">
+                    <td class="p-4 font-semibold capitalize" x-text="formatLeaveType(r.type)"></td>
+                    <td class="p-4 font-medium text-slate-700" x-text="formatDateRange(r.start_date, r.end_date)"></td>
+                    <td class="p-4 font-bold text-slate-900" x-text="r.business_days + ' dias'"></td>
+                    <td class="p-4">
+                      <span class="px-2.5 py-1 rounded-full font-bold text-[11px] capitalize flex items-center gap-1 w-fit"
+                        :class="{
+                          'bg-amber-100 text-amber-800': r.status === 'pendente',
+                          'bg-emerald-100 text-emerald-800': r.status === 'aprovado',
+                          'bg-orange-100 text-orange-800': r.status === 'cancelamento_pendente',
+                          'bg-red-100 text-red-800': r.status === 'rejeitado',
+                          'bg-slate-100 text-slate-600': r.status === 'cancelado'
+                        }">
+                        <span class="w-1.5 h-1.5 rounded-full"
+                          :class="{
+                            'bg-amber-500': r.status === 'pendente',
+                            'bg-emerald-500': r.status === 'aprovado',
+                            'bg-orange-500': r.status === 'cancelamento_pendente',
+                            'bg-red-500': r.status === 'rejeitado',
+                            'bg-slate-400': r.status === 'cancelado'
+                          }"></span>
+                        <span x-text="formatStatusLabel(r.status)"></span>
                       </span>
                     </td>
-                    <td class="p-3 font-medium text-slate-700">
-                      <span x-text="formatDateRange(item.start_date, item.end_date)"></span>
+                    <td class="p-4 text-slate-600 max-w-xs truncate" x-text="r.reason || '—'"></td>
+                    <td class="p-4 text-slate-600">
+                      <template x-if="r.manager_comment">
+                        <span class="italic text-slate-500" x-text="'\"' + r.manager_comment + '\"'"></span>
+                      </template>
+                      <template x-if="!r.manager_comment">
+                        <span class="text-slate-400">—</span>
+                      </template>
                     </td>
-                    <td class="p-3 font-bold text-slate-900" x-text="item.business_days + ' dias'"></td>
+                    <td class="p-4 text-right">
+                      <!-- Botão Cancelar Pedido Pendente -->
+                      <button x-show="r.status === 'pendente'" @click="cancelMyRequest(r)" class="text-red-600 hover:text-red-700 font-semibold text-xs border border-red-200 bg-red-50 hover:bg-red-100 px-2.5 py-1 rounded-lg transition">
+                        Cancelar
+                      </button>
+                      <!-- Botão Solicitar Cancelamento de Férias Aprovadas -->
+                      <button x-show="r.status === 'aprovado'" @click="openRequestCancellationModal(r)" class="text-amber-700 hover:text-amber-800 font-semibold text-xs border border-amber-300 bg-amber-50 hover:bg-amber-100 px-2.5 py-1 rounded-lg transition" title="Pedir para anular estas férias e recuperar os dias de saldo">
+                        Pedir Cancelamento
+                      </button>
+                      <span x-show="r.status === 'cancelamento_pendente'" class="text-[11px] font-medium text-orange-600 italic">
+                        Em análise pela gestão
+                      </span>
+                    </td>
                   </tr>
                 </template>
               </tbody>
@@ -444,496 +560,331 @@
 
       </div>
 
-    </div>
-
-    <!-- TAB 2: OS MEUS PEDIDOS (PORTAL DO COLABORADOR) -->
-    <div x-show="activeTab === 'my_requests'" class="space-y-6">
-      
-      <!-- Header do Portal do Colaborador com Balanço -->
-      <div class="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-6 text-white shadow-lg shadow-blue-500/20 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-        <div>
-          <div class="flex items-center gap-2 text-blue-200 text-xs font-semibold uppercase tracking-wider">
-            <i data-lucide="user" class="w-4 h-4"></i>
-            Área Pessoal de Férias
-          </div>
-          <h2 class="text-2xl font-black mt-1">Os Meus Pedidos & Saldos</h2>
-          <p class="text-blue-100 text-xs mt-1">Submeta pedidos, acompanhe o estado de aprovação e faça a gestão dos seus dias.</p>
-        </div>
-
-        <!-- Indicadores de Saldo Rápido -->
-        <div class="flex items-center gap-4 bg-white/10 backdrop-blur-md p-4 rounded-xl border border-white/20">
-          <div class="text-center pr-4 border-r border-white/20">
-            <span class="text-xs text-blue-200 block">Direito Anual</span>
-            <span class="text-2xl font-black" x-text="currentUser?.balances?.total_days ?? 22"></span>
-          </div>
-          <div class="text-center pr-4 border-r border-white/20">
-            <span class="text-xs text-blue-200 block">Gozados</span>
-            <span class="text-2xl font-black text-emerald-300" x-text="currentUser?.balances?.approved_days ?? 0"></span>
-          </div>
-          <div class="text-center">
-            <span class="text-xs text-blue-200 block">Disponíveis</span>
-            <span class="text-2xl font-black text-yellow-300" x-text="currentUser?.balances?.remaining_days ?? 0"></span>
-          </div>
-          <button @click="openNewRequestModal()" class="ml-2 bg-white text-blue-700 hover:bg-blue-50 font-bold text-xs px-4 py-2.5 rounded-lg shadow transition">
-            + Novo Pedido
-          </button>
-        </div>
-      </div>
-
-      <!-- Tabela com os Meus Pedidos -->
-      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div class="p-5 border-b border-slate-100 flex justify-between items-center">
-          <h3 class="font-bold text-slate-800 text-sm">Histórico de Pedidos Pessoais</h3>
-          <button @click="loadMyRequests()" class="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1">
-            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Atualizar
-          </button>
-        </div>
-
-        <div class="overflow-x-auto">
-          <table class="w-full text-left text-xs">
-            <thead class="bg-slate-50 text-slate-500 font-semibold border-b border-slate-100">
-              <tr>
-                <th class="p-4">Tipo</th>
-                <th class="p-4">Período</th>
-                <th class="p-4">Dias Úteis</th>
-                <th class="p-4">Estado</th>
-                <th class="p-4">Motivo / Notas</th>
-                <th class="p-4">Resposta da Gestão</th>
-                <th class="p-4 text-right">Ação</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-              <template x-if="myRequests.length === 0">
-                <tr>
-                  <td colspan="7" class="p-8 text-center text-slate-400">
-                    <i data-lucide="calendar" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
-                    Ainda não submeteu nenhum pedido de férias. Clique no botão "+ Novo Pedido" acima.
-                  </td>
-                </tr>
-              </template>
-              <template x-for="r in myRequests" :key="r.id">
-                <tr class="hover:bg-slate-50 transition">
-                  <td class="p-4 font-semibold capitalize" x-text="formatLeaveType(r.type)"></td>
-                  <td class="p-4 font-medium text-slate-700" x-text="formatDateRange(r.start_date, r.end_date)"></td>
-                  <td class="p-4 font-bold text-slate-900" x-text="r.business_days + ' dias'"></td>
-                  <td class="p-4">
-                    <span class="px-2.5 py-1 rounded-full font-bold text-[11px] capitalize flex items-center gap-1 w-fit"
-                      :class="{
-                        'bg-amber-100 text-amber-800': r.status === 'pendente',
-                        'bg-emerald-100 text-emerald-800': r.status === 'aprovado',
-                        'bg-red-100 text-red-800': r.status === 'rejeitado',
-                        'bg-slate-100 text-slate-600': r.status === 'cancelado'
-                      }">
-                      <span class="w-1.5 h-1.5 rounded-full"
-                        :class="{
-                          'bg-amber-500': r.status === 'pendente',
-                          'bg-emerald-500': r.status === 'aprovado',
-                          'bg-red-500': r.status === 'rejeitado',
-                          'bg-slate-400': r.status === 'cancelado'
-                        }"></span>
-                      <span x-text="r.status"></span>
-                    </span>
-                  </td>
-                  <td class="p-4 text-slate-600 max-w-xs truncate" x-text="r.reason || '—'"></td>
-                  <td class="p-4 text-slate-600">
-                    <template x-if="r.manager_comment">
-                      <span class="italic text-slate-500" x-text="'\"' + r.manager_comment + '\"'"></span>
-                    </template>
-                    <template x-if="!r.manager_comment">
-                      <span class="text-slate-400">—</span>
-                    </template>
-                  </td>
-                  <td class="p-4 text-right">
-                    <button x-show="r.status === 'pendente'" @click="cancelMyRequest(r.id)" class="text-red-600 hover:text-red-700 font-semibold text-xs border border-red-200 bg-red-50 hover:bg-red-100 px-2.5 py-1 rounded-lg transition">
-                      Cancelar
-                    </button>
-                  </td>
-                </tr>
-              </template>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-    </div>
-
-    <!-- TAB 3: APROVAÇÕES (VISÃO DO GESTOR & RH) -->
-    <div x-show="activeTab === 'approvals'" class="space-y-6">
-      
-      <div class="flex justify-between items-center">
-        <div>
-          <h2 class="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <i data-lucide="shield-check" class="w-5 h-5 text-blue-600"></i>
-            Painel de Aprovação de Pedidos
-          </h2>
-          <p class="text-xs text-slate-500">Analise os pedidos dos colaboradores com deteção automática de conflitos de ausência na equipa.</p>
-        </div>
-        <button @click="loadApprovalRequests()" class="text-xs font-semibold text-slate-600 hover:text-slate-800 bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5">
-          <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
-          Atualizar Fila
-        </button>
-      </div>
-
-      <!-- Lista de Pedidos Pendentes -->
-      <div class="space-y-4">
-        <template x-if="pendingApprovals.length === 0">
-          <div class="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400">
-            <div class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-3">
-              <i data-lucide="check-circle-2" class="w-6 h-6"></i>
-            </div>
-            <h4 class="font-bold text-slate-800 text-sm">Tudo em dia!</h4>
-            <p class="text-xs text-slate-500 mt-1">Não existem pedidos de férias pendentes de aprovação neste momento.</p>
-          </div>
-        </template>
-
-        <template x-for="req in pendingApprovals" :key="req.id">
-          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 transition hover:border-slate-300">
-            <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-              
-              <!-- Colaborador Info -->
-              <div class="flex items-center gap-3">
-                <div class="w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-sm" :style="'background-color: ' + (req.avatar_color || '#3b82f6')">
-                  <span x-text="getInitials(req.user_name)"></span>
-                </div>
-                <div>
-                  <div class="flex items-center gap-2">
-                    <h4 class="font-bold text-slate-900 text-sm" x-text="req.user_name"></h4>
-                    <span class="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full font-medium" x-text="req.department_name"></span>
-                  </div>
-                  <p class="text-xs text-slate-500" x-text="req.job_title || req.user_email"></p>
-                </div>
-              </div>
-
-              <!-- Datas e Detalhes -->
-              <div class="bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-100 flex items-center gap-6">
-                <div>
-                  <p class="text-[10px] font-semibold text-slate-400 uppercase">Tipo</p>
-                  <p class="text-xs font-bold text-slate-800 capitalize" x-text="formatLeaveType(req.type)"></p>
-                </div>
-                <div>
-                  <p class="text-[10px] font-semibold text-slate-400 uppercase">Período</p>
-                  <p class="text-xs font-bold text-slate-800" x-text="formatDateRange(req.start_date, req.end_date)"></p>
-                </div>
-                <div>
-                  <p class="text-[10px] font-semibold text-slate-400 uppercase">Duração</p>
-                  <p class="text-xs font-black text-blue-600" x-text="req.business_days + ' dias úteis'"></p>
-                </div>
-              </div>
-
-              <!-- Ações de Aprovação -->
-              <div class="flex items-center gap-2 w-full lg:w-auto justify-end">
-                <button @click="openRejectModal(req)" class="flex-1 lg:flex-none text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 px-4 py-2 rounded-xl transition flex items-center justify-center gap-1.5">
-                  <i data-lucide="x" class="w-4 h-4"></i>
-                  Rejeitar
-                </button>
-                <button @click="approveRequest(req.id)" class="flex-1 lg:flex-none text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm shadow-emerald-500/30 px-5 py-2 rounded-xl transition flex items-center justify-center gap-1.5">
-                  <i data-lucide="check" class="w-4 h-4"></i>
-                  Aprovar Pedido
-                </button>
-              </div>
-
-            </div>
-
-            <!-- Justificação do Pedido -->
-            <div class="mt-3 pt-3 border-t border-slate-100 text-xs text-slate-600 flex items-center gap-2" x-show="req.reason">
-              <span class="font-semibold text-slate-700">Motivo:</span>
-              <span class="italic" x-text="req.reason"></span>
-            </div>
-
-            <!-- ALERTA DE CONFLITO / SOBREPOSIÇÃO INTELIGENTE -->
-            <template x-if="req.conflicts && req.conflicts.length > 0">
-              <div class="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2.5">
-                <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600 shrink-0 mt-0.5"></i>
-                <div>
-                  <p class="font-bold text-amber-900">Alerta de Sobreposição no Departamento (<span x-text="req.department_name"></span>):</p>
-                  <p class="mt-0.5 text-amber-800">
-                    <span x-text="req.conflicts.length"></span> colega(s) também têm ausência no mesmo período:
-                    <template x-for="c in req.conflicts" :key="c.id">
-                      <span class="inline-block font-semibold mr-1 bg-amber-200/60 px-1.5 py-0.2 rounded text-[11px]">
-                        <span x-text="c.user_name"></span> (<span x-text="formatDateShort(c.start_date) + ' a ' + formatDateShort(c.end_date)"></span> - <span x-text="c.status"></span>)
-                      </span>
-                    </template>
-                  </p>
-                </div>
-              </div>
-            </template>
-
-          </div>
-        </template>
-      </div>
-
-    </div>
-
-    <!-- TAB 4: CALENDÁRIO & GANTT / TIMELINE -->
-    <div x-show="activeTab === 'calendar'" class="space-y-6">
-      
-      <!-- Barra de Ferramentas e Filtros -->
-      <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <!-- TAB 3: APROVAÇÕES & CANCELAMENTOS (VISÃO DO GESTOR & RH) -->
+      <div x-show="activeTab === 'approvals'" class="space-y-6">
         
-        <div class="flex items-center gap-3">
-          <!-- Alternar Vistas: Calendário vs Gantt -->
-          <div class="flex bg-slate-100 p-1 rounded-xl">
-            <button @click="calendarViewMode = 'grid'; renderCalendar()" class="px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5" :class="calendarViewMode === 'grid' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'">
-              <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
-              Calendário Mensal
-            </button>
-            <button @click="calendarViewMode = 'timeline'; renderCalendar()" class="px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5" :class="calendarViewMode === 'timeline' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'">
-              <i data-lucide="git-commit" class="w-3.5 h-3.5"></i>
-              Gantt da Equipa
-            </button>
+        <div class="flex justify-between items-center">
+          <div>
+            <h2 class="text-xl font-bold text-slate-900 flex items-center gap-2">
+              <i data-lucide="shield-check" class="w-5 h-5 text-blue-600"></i>
+              Painel de Aprovações & Cancelamentos
+            </h2>
+            <p class="text-xs text-slate-500">Valide novos pedidos de férias e pedidos de anulação com devolução automática de saldos.</p>
           </div>
-
-          <!-- Legenda Rápida -->
-          <div class="hidden lg:flex items-center gap-3 text-xs text-slate-500">
-            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span> Férias</span>
-            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-red-500"></span> Baixa</span>
-            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span> Feriado</span>
-          </div>
+          <button @click="loadApprovalRequests()" class="text-xs font-semibold text-slate-600 hover:text-slate-800 bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+            Atualizar Fila
+          </button>
         </div>
 
-        <!-- Export Buttons -->
-        <div class="flex items-center gap-2">
-          <a href="/api/export/csv" class="text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-2 rounded-xl transition flex items-center gap-1.5">
-            <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-emerald-600"></i>
-            Exportar CSV
-          </a>
-          <a href="/api/export/ics" class="text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded-xl transition flex items-center gap-1.5 shadow-sm shadow-blue-500/20">
-            <i data-lucide="calendar-plus" class="w-3.5 h-3.5"></i>
-            Sincronizar (iCal / Outlook)
-          </a>
-        </div>
+        <div class="space-y-4">
+          <template x-if="pendingApprovals.length === 0">
+            <div class="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400">
+              <div class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                <i data-lucide="check-circle-2" class="w-6 h-6"></i>
+              </div>
+              <h4 class="font-bold text-slate-800 text-sm">Tudo em dia!</h4>
+              <p class="text-xs text-slate-500 mt-1">Não existem pedidos pendentes de aprovação ou cancelamento neste momento.</p>
+            </div>
+          </template>
 
-      </div>
-
-      <!-- Recipiente do Calendário Mensal -->
-      <div x-show="calendarViewMode === 'grid'" class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-        <div id="fullcalendar-container" class="min-h-[600px]"></div>
-      </div>
-
-      <!-- Recipiente do Gantt / Timeline -->
-      <div x-show="calendarViewMode === 'timeline'" class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
-        <div class="flex justify-between items-center mb-4">
-          <div class="flex items-center gap-2">
-            <button @click="changeGanttMonth(-1)" class="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
-            <h4 class="font-bold text-slate-800 text-sm" x-text="ganttMonthLabel"></h4>
-            <button @click="changeGanttMonth(1)" class="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
-          </div>
-          <span class="text-xs text-slate-400 font-medium">Visualização diária da equipa</span>
-        </div>
-
-        <div class="min-w-[900px] border border-slate-200 rounded-xl overflow-hidden">
-          <!-- Cabeçalho dos dias -->
-          <div class="timeline-grid bg-slate-100 border-b border-slate-200 text-center text-[11px] font-bold text-slate-600">
-            <div class="p-2.5 text-left border-r border-slate-200">Colaborador</div>
-            <template x-for="day in ganttDaysInMonth" :key="day">
-              <div class="p-2 border-r border-slate-200" :class="isWeekend(day) ? 'bg-slate-200 text-slate-400' : ''" x-text="day"></div>
-            </template>
-          </div>
-
-          <!-- Linhas por Colaborador -->
-          <div class="divide-y divide-slate-100">
-            <template x-for="u in users" :key="u.id">
-              <div class="timeline-grid text-xs items-center hover:bg-slate-50/70 transition">
-                <div class="p-2.5 border-r border-slate-200 flex items-center gap-2 font-semibold text-slate-800 truncate">
-                  <div class="w-5 h-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold shrink-0" :style="'background-color: ' + (u.avatar_color || '#3b82f6')">
-                    <span x-text="getInitials(u.name)"></span>
+          <template x-for="req in pendingApprovals" :key="req.id">
+            <div class="bg-white rounded-2xl border shadow-sm p-5 transition"
+                 :class="req.status === 'cancelamento_pendente' ? 'border-orange-300 bg-orange-50/20' : 'border-slate-200 hover:border-slate-300'">
+              
+              <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+                
+                <div class="flex items-center gap-3">
+                  <div class="w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-sm" :style="'background-color: ' + (req.avatar_color || '#3b82f6')">
+                    <span x-text="getInitials(req.user_name)"></span>
                   </div>
-                  <span class="truncate" x-text="u.name"></span>
+                  <div>
+                    <div class="flex items-center gap-2">
+                      <h4 class="font-bold text-slate-900 text-sm" x-text="req.user_name"></h4>
+                      <span class="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full font-medium" x-text="req.department_name"></span>
+                      <!-- Badge Especial se for Pedido de Cancelamento -->
+                      <span x-show="req.status === 'cancelamento_pendente'" class="text-[10px] bg-orange-100 text-orange-800 border border-orange-200 px-2 py-0.5 rounded-full font-bold">
+                        ⚠️ Pedido de Cancelamento
+                      </span>
+                    </div>
+                    <p class="text-xs text-slate-500" x-text="req.job_title || req.user_email"></p>
+                  </div>
                 </div>
-                <!-- Células diárias -->
-                <template x-for="day in ganttDaysInMonth" :key="day">
-                  <div class="h-9 border-r border-slate-100 flex items-center justify-center p-0.5" :class="isWeekend(day) ? 'bg-slate-50' : ''">
-                    <template x-if="getLeaveStatusForUserDay(u.id, day)">
-                      <div class="w-full h-6 rounded flex items-center justify-center text-[9px] font-bold text-white shadow-xs"
-                           :style="'background-color: ' + getLeaveColorForUserDay(u.id, day)"
-                           :title="getLeaveTooltipForUserDay(u.id, day)">
-                        ●
-                      </div>
-                    </template>
+
+                <div class="bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-100 flex items-center gap-6">
+                  <div>
+                    <p class="text-[10px] font-semibold text-slate-400 uppercase">Tipo</p>
+                    <p class="text-xs font-bold text-slate-800 capitalize" x-text="formatLeaveType(req.type)"></p>
+                  </div>
+                  <div>
+                    <p class="text-[10px] font-semibold text-slate-400 uppercase">Período</p>
+                    <p class="text-xs font-bold text-slate-800" x-text="formatDateRange(req.start_date, req.end_date)"></p>
+                  </div>
+                  <div>
+                    <p class="text-[10px] font-semibold text-slate-400 uppercase">Duração</p>
+                    <p class="text-xs font-black text-blue-600" x-text="req.business_days + ' dias úteis'"></p>
+                  </div>
+                </div>
+
+                <!-- Ações para NOVO PEDIDO PENDENTE -->
+                <template x-if="req.status === 'pendente'">
+                  <div class="flex items-center gap-2 w-full lg:w-auto justify-end">
+                    <button @click="openRejectModal(req)" class="flex-1 lg:flex-none text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 px-4 py-2 rounded-xl transition flex items-center justify-center gap-1.5">
+                      <i data-lucide="x" class="w-4 h-4"></i> Rejeitar
+                    </button>
+                    <button @click="approveRequest(req.id)" class="flex-1 lg:flex-none text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm shadow-emerald-500/30 px-5 py-2 rounded-xl transition flex items-center justify-center gap-1.5">
+                      <i data-lucide="check" class="w-4 h-4"></i> Aprovar Pedido
+                    </button>
                   </div>
                 </template>
+
+                <!-- Ações para PEDIDO DE CANCELAMENTO -->
+                <template x-if="req.status === 'cancelamento_pendente'">
+                  <div class="flex items-center gap-2 w-full lg:w-auto justify-end">
+                    <button @click="rejectCancellation(req.id)" class="flex-1 lg:flex-none text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 px-3.5 py-2 rounded-xl transition">
+                      Manter Férias
+                    </button>
+                    <button @click="approveCancellation(req.id)" class="flex-1 lg:flex-none text-xs font-bold text-white bg-orange-600 hover:bg-orange-700 shadow-sm px-4 py-2 rounded-xl transition flex items-center justify-center gap-1.5">
+                      <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                      Aprovar Cancelamento (Devolver Dias)
+                    </button>
+                  </div>
+                </template>
+
               </div>
-            </template>
+
+              <div class="mt-3 pt-3 border-t border-slate-100 text-xs text-slate-600 flex items-center gap-2" x-show="req.reason || req.manager_comment">
+                <span class="font-semibold text-slate-700">Observações:</span>
+                <span class="italic" x-text="req.manager_comment || req.reason"></span>
+              </div>
+
+              <!-- Alerta de Sobreposição -->
+              <template x-if="req.conflicts && req.conflicts.length > 0">
+                <div class="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2.5">
+                  <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600 shrink-0 mt-0.5"></i>
+                  <div>
+                    <p class="font-bold text-amber-900">Alerta de Sobreposição no Departamento (<span x-text="req.department_name"></span>):</p>
+                    <p class="mt-0.5 text-amber-800">
+                      <span x-text="req.conflicts.length"></span> colega(s) também têm ausência no mesmo período:
+                      <template x-for="c in req.conflicts" :key="c.id">
+                        <span class="inline-block font-semibold mr-1 bg-amber-200/60 px-1.5 py-0.2 rounded text-[11px]">
+                          <span x-text="c.user_name"></span> (<span x-text="formatDateShort(c.start_date) + ' a ' + formatDateShort(c.end_date)"></span>)
+                        </span>
+                      </template>
+                    </p>
+                  </div>
+                </div>
+              </template>
+
+            </div>
+          </template>
+        </div>
+
+      </div>
+
+      <!-- TAB 4: CALENDÁRIO & GANTT -->
+      <div x-show="activeTab === 'calendar'" class="space-y-6">
+        
+        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div class="flex items-center gap-3">
+            <div class="flex bg-slate-100 p-1 rounded-xl">
+              <button @click="calendarViewMode = 'grid'; renderCalendar()" class="px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5" :class="calendarViewMode === 'grid' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'">
+                <i data-lucide="calendar" class="w-3.5 h-3.5"></i> Calendário Mensal
+              </button>
+              <button @click="calendarViewMode = 'timeline'; renderCalendar()" class="px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5" :class="calendarViewMode === 'timeline' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'">
+                <i data-lucide="git-commit" class="w-3.5 h-3.5"></i> Gantt da Equipa
+              </button>
+            </div>
+            <div class="hidden lg:flex items-center gap-3 text-xs text-slate-500">
+              <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span> Férias</span>
+              <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-red-500"></span> Baixa</span>
+              <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span> Feriado</span>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <a href="/api/export/csv" class="text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-2 rounded-xl transition flex items-center gap-1.5">
+              <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-emerald-600"></i> Exportar CSV
+            </a>
+            <a href="/api/export/ics" class="text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded-xl transition flex items-center gap-1.5 shadow-sm shadow-blue-500/20">
+              <i data-lucide="calendar-plus" class="w-3.5 h-3.5"></i> Sincronizar (iCal)
+            </a>
           </div>
         </div>
 
-      </div>
+        <div x-show="calendarViewMode === 'grid'" class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+          <div id="fullcalendar-container" class="min-h-[600px]"></div>
+        </div>
 
-    </div>
-
-    <!-- TAB 5: GESTÃO DE EQUIPA, SALDOS & ADMIN -->
-    <div x-show="activeTab === 'team'" class="space-y-6">
-      
-      <!-- Cartão Informativo de Acesso dos Colaboradores -->
-      <div class="bg-gradient-to-r from-slate-900 to-slate-800 text-white rounded-2xl p-6 shadow-md border border-slate-700 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <div class="flex items-center gap-2 text-blue-400 text-xs font-bold uppercase tracking-wider">
-            <i data-lucide="share-2" class="w-4 h-4"></i>
-            Como os Colaboradores Acedem para Inserir Férias
+        <div x-show="calendarViewMode === 'timeline'" class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
+          <div class="flex justify-between items-center mb-4">
+            <div class="flex items-center gap-2">
+              <button @click="changeGanttMonth(-1)" class="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+              <h4 class="font-bold text-slate-800 text-sm" x-text="ganttMonthLabel"></h4>
+              <button @click="changeGanttMonth(1)" class="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+            </div>
+            <span class="text-xs text-slate-400 font-medium">Visualização diária da equipa</span>
           </div>
-          <h3 class="text-base font-bold mt-1">Acesso Direto à Aplicação</h3>
-          <p class="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
-            Os colaboradores acedem através do navegador no seu computador ou telemóvel usando o endereço da rede (ex: <code class="bg-slate-800 px-2 py-0.5 rounded text-blue-300 font-mono" x-text="window.location.origin"></code>) e entram com o seu <strong>Email</strong> e a respetiva <strong>Palavra-passe</strong> (padrão inicial: <code class="text-yellow-300 font-mono">1234</code>).
-          </p>
-        </div>
-        <button @click="openNewUserModal()" class="text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 px-4 py-2.5 rounded-xl shadow-md transition flex items-center gap-1.5 shrink-0">
-          <i data-lucide="user-plus" class="w-4 h-4"></i>
-          Criar Novo Colaborador
-        </button>
-      </div>
 
-      <div class="flex justify-between items-center">
-        <div>
-          <h2 class="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <i data-lucide="users" class="w-5 h-5 text-blue-600"></i>
-            Painel de Administração da Equipa
-          </h2>
-          <p class="text-xs text-slate-500">Crie, edite e elimine utilizadores, e defina a dotação de dias anuais de cada colaborador.</p>
-        </div>
-        <span class="text-xs bg-slate-200 text-slate-700 font-bold px-3 py-1 rounded-full" x-text="users.length + ' Colaboradores Registados'"></span>
-      </div>
+          <div class="min-w-[900px] border border-slate-200 rounded-xl overflow-hidden">
+            <div class="timeline-grid bg-slate-100 border-b border-slate-200 text-center text-[11px] font-bold text-slate-600">
+              <div class="p-2.5 text-left border-r border-slate-200">Colaborador</div>
+              <template x-for="day in ganttDaysInMonth" :key="day">
+                <div class="p-2 border-r border-slate-200" :class="isWeekend(day) ? 'bg-slate-200 text-slate-400' : ''" x-text="day"></div>
+              </template>
+            </div>
 
-      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div class="overflow-x-auto">
-          <table class="w-full text-left text-xs">
-            <thead class="bg-slate-50 text-slate-500 font-semibold border-b border-slate-100">
-              <tr>
-                <th class="p-4">Colaborador</th>
-                <th class="p-4">Email de Acesso</th>
-                <th class="p-4">Departamento</th>
-                <th class="p-4">Papel (Role)</th>
-                <th class="p-4 text-center">Dotação Anual</th>
-                <th class="p-4 text-center">Gozados</th>
-                <th class="p-4 text-center">Disponíveis</th>
-                <th class="p-4 text-right">Ações de Admin</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
+            <div class="divide-y divide-slate-100">
               <template x-for="u in users" :key="u.id">
-                <tr class="hover:bg-slate-50 transition">
-                  <td class="p-4 font-semibold text-slate-800 flex items-center gap-3">
-                    <div class="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-xs shadow-sm" :style="'background-color: ' + (u.avatar_color || '#3b82f6')">
+                <div class="timeline-grid text-xs items-center hover:bg-slate-50/70 transition">
+                  <div class="p-2.5 border-r border-slate-200 flex items-center gap-2 font-semibold text-slate-800 truncate">
+                    <div class="w-5 h-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold shrink-0" :style="'background-color: ' + (u.avatar_color || '#3b82f6')">
                       <span x-text="getInitials(u.name)"></span>
                     </div>
-                    <div>
-                      <p class="font-bold text-slate-900" x-text="u.name"></p>
-                      <p class="text-[11px] text-slate-500" x-text="u.job_title || 'Colaborador'"></p>
-                    </div>
-                  </td>
-                  <td class="p-4 text-slate-600 font-mono text-[11px]" x-text="u.email"></td>
-                  <td class="p-4 text-slate-700 font-medium" x-text="u.department_name || '—'"></td>
-                  <td class="p-4">
-                    <span class="text-[10px] font-bold px-2 py-0.5 rounded capitalize"
-                      :class="{
-                        'bg-purple-100 text-purple-700': u.role === 'admin',
-                        'bg-blue-100 text-blue-700': u.role === 'gestor',
-                        'bg-slate-100 text-slate-700': u.role === 'colaborador'
-                      }"
-                      x-text="u.role">
-                    </span>
-                  </td>
-                  <td class="p-4 text-center font-bold text-slate-800">
-                    <span class="bg-slate-100 text-slate-800 px-2 py-0.5 rounded" x-text="u.total_vacation_days + ' dias'"></span>
-                  </td>
-                  <td class="p-4 text-center font-bold text-emerald-600" x-text="(u.balances?.approved_days ?? 0) + ' dias'"></td>
-                  <td class="p-4 text-center font-black text-blue-600" x-text="(u.balances?.remaining_days ?? u.total_vacation_days) + ' dias'"></td>
-                  <td class="p-4 text-right">
-                    <div class="flex items-center justify-end gap-1.5">
-                      <!-- Botão Editar -->
-                      <button @click="openEditUserModal(u)" class="text-blue-600 hover:text-blue-800 font-semibold p-1.5 rounded hover:bg-blue-50 transition" title="Editar Utilizador & Dias">
-                        <i data-lucide="edit-3" class="w-4 h-4"></i>
-                      </button>
-                      <!-- Botão Eliminar (Apenas Admin) -->
-                      <template x-if="currentUser?.role === 'admin'">
-                        <button @click="confirmDeleteUser(u)" class="text-red-500 hover:text-red-700 font-semibold p-1.5 rounded hover:bg-red-50 transition" title="Eliminar Colaborador">
-                          <i data-lucide="trash-2" class="w-4 h-4"></i>
-                        </button>
+                    <span class="truncate" x-text="u.name"></span>
+                  </div>
+                  <template x-for="day in ganttDaysInMonth" :key="day">
+                    <div class="h-9 border-r border-slate-100 flex items-center justify-center p-0.5" :class="isWeekend(day) ? 'bg-slate-50' : ''">
+                      <template x-if="getLeaveStatusForUserDay(u.id, day)">
+                        <div class="w-full h-6 rounded flex items-center justify-center text-[9px] font-bold text-white shadow-xs"
+                             :style="'background-color: ' + getLeaveColorForUserDay(u.id, day)"
+                             :title="getLeaveTooltipForUserDay(u.id, day)">
+                          ●
+                        </div>
                       </template>
                     </div>
-                  </td>
-                </tr>
+                  </template>
+                </div>
               </template>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-    </div>
-
-    <!-- TAB 6: FERIADOS & CONFIGURAÇÕES -->
-    <div x-show="activeTab === 'holidays'" class="space-y-6">
-      <div class="flex justify-between items-center">
-        <div>
-          <h2 class="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <i data-lucide="flag" class="w-5 h-5 text-blue-600"></i>
-            Feriados Nacionais & Pontes da Empresa
-          </h2>
-          <p class="text-xs text-slate-500">Os feriados aqui definidos são automaticamente descontados na contagem de dias úteis de férias.</p>
-        </div>
-        <button @click="openHolidayModal = true" class="text-xs font-bold text-slate-800 bg-white border border-slate-200 hover:bg-slate-50 px-3.5 py-2 rounded-xl shadow-sm transition flex items-center gap-1.5">
-          <i data-lucide="plus" class="w-4 h-4"></i>
-          Adicionar Feriado / Ponte
-        </button>
-      </div>
-
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <template x-for="h in holidays" :key="h.id">
-          <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold text-sm">
-                <i data-lucide="sun" class="w-5 h-5"></i>
-              </div>
-              <div>
-                <h4 class="font-bold text-xs text-slate-800" x-text="h.name"></h4>
-                <p class="text-[11px] text-slate-500 font-medium" x-text="formatHolidayDate(h.date)"></p>
-              </div>
             </div>
-            <button @click="deleteHoliday(h.id)" class="text-slate-400 hover:text-red-500 p-1.5 rounded transition" title="Remover">
-              <i data-lucide="trash-2" class="w-4 h-4"></i>
-            </button>
           </div>
-        </template>
-      </div>
-    </div>
-
-  </main>
-
-  <!-- MODAL: LOGIN INDIVIDUAL DE COLABORADOR -->
-  <div x-show="openLoginModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" x-transition.opacity>
-    <div class="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden" @click.away="openLoginModal = false">
-      <div class="p-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-center">
-        <div class="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-2 backdrop-blur-sm">
-          <i data-lucide="lock" class="w-6 h-6"></i>
         </div>
-        <h3 class="font-black text-xl">Entrar no TeamVacay</h3>
-        <p class="text-xs text-blue-100 mt-1">Acesso individual de colaborador ou gestor</p>
+
       </div>
 
-      <form @submit.prevent="performLogin()" class="p-6 space-y-4">
-        <div>
-          <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Email Profissional</label>
-          <input type="email" x-model="loginForm.email" placeholder="ex: ana.silva@empresa.pt" required class="w-full text-xs font-medium border border-slate-300 rounded-xl px-3 py-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none">
-        </div>
-        <div>
-          <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Palavra-passe</label>
-          <input type="password" x-model="loginForm.password" placeholder="Predefinida: 1234" required class="w-full text-xs font-medium border border-slate-300 rounded-xl px-3 py-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none">
-        </div>
-
-        <div class="pt-2 flex justify-between items-center">
-          <button type="button" @click="openLoginModal = false" class="text-xs text-slate-500 font-semibold hover:text-slate-800">Fechar</button>
-          <button type="submit" class="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-500/20 transition flex items-center gap-1.5">
-            <i data-lucide="log-in" class="w-3.5 h-3.5"></i>
-            Iniciar Sessão
+      <!-- TAB 5: GESTÃO DE EQUIPA, SALDOS & ADMIN -->
+      <div x-show="activeTab === 'team'" class="space-y-6">
+        
+        <div class="flex justify-between items-center">
+          <div>
+            <h2 class="text-xl font-bold text-slate-900 flex items-center gap-2">
+              <i data-lucide="users" class="w-5 h-5 text-blue-600"></i>
+              Gestão de Colaboradores & Dotações de Férias
+            </h2>
+            <p class="text-xs text-slate-500">Crie novos colaboradores, ajuste os limites anuais de dias ou remova contas.</p>
+          </div>
+          <button @click="openNewUserModal()" class="text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-xl shadow-sm transition flex items-center gap-1.5">
+            <i data-lucide="user-plus" class="w-4 h-4"></i> Criar Novo Colaborador
           </button>
         </div>
-      </form>
-    </div>
+
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50 text-slate-500 font-semibold border-b border-slate-100">
+                <tr>
+                  <th class="p-4">Colaborador</th>
+                  <th class="p-4">Email de Acesso</th>
+                  <th class="p-4">Departamento</th>
+                  <th class="p-4">Papel (Role)</th>
+                  <th class="p-4 text-center">Dotação Anual</th>
+                  <th class="p-4 text-center">Gozados</th>
+                  <th class="p-4 text-center">Disponíveis</th>
+                  <th class="p-4 text-right">Ações de Admin</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                <template x-for="u in users" :key="u.id">
+                  <tr class="hover:bg-slate-50 transition">
+                    <td class="p-4 font-semibold text-slate-800 flex items-center gap-3">
+                      <div class="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-xs shadow-sm" :style="'background-color: ' + (u.avatar_color || '#3b82f6')">
+                        <span x-text="getInitials(u.name)"></span>
+                      </div>
+                      <div>
+                        <p class="font-bold text-slate-900" x-text="u.name"></p>
+                        <p class="text-[11px] text-slate-500" x-text="u.job_title || 'Colaborador'"></p>
+                      </div>
+                    </td>
+                    <td class="p-4 text-slate-600 font-mono text-[11px]" x-text="u.email"></td>
+                    <td class="p-4 text-slate-700 font-medium" x-text="u.department_name || '—'"></td>
+                    <td class="p-4">
+                      <span class="text-[10px] font-bold px-2 py-0.5 rounded capitalize"
+                        :class="{
+                          'bg-purple-100 text-purple-700': u.role === 'admin',
+                          'bg-blue-100 text-blue-700': u.role === 'gestor',
+                          'bg-slate-100 text-slate-700': u.role === 'colaborador'
+                        }"
+                        x-text="u.role">
+                      </span>
+                    </td>
+                    <td class="p-4 text-center font-bold text-slate-800">
+                      <span class="bg-slate-100 text-slate-800 px-2 py-0.5 rounded" x-text="u.total_vacation_days + ' dias'"></span>
+                    </td>
+                    <td class="p-4 text-center font-bold text-emerald-600" x-text="(u.balances?.approved_days ?? 0) + ' dias'"></td>
+                    <td class="p-4 text-center font-black text-blue-600" x-text="(u.balances?.remaining_days ?? u.total_vacation_days) + ' dias'"></td>
+                    <td class="p-4 text-right">
+                      <div class="flex items-center justify-end gap-1.5">
+                        <button @click="openEditUserModal(u)" class="text-blue-600 hover:text-blue-800 font-semibold p-1.5 rounded hover:bg-blue-50 transition" title="Editar Utilizador & Dias">
+                          <i data-lucide="edit-3" class="w-4 h-4"></i>
+                        </button>
+                        <template x-if="currentUser?.role === 'admin'">
+                          <button @click="confirmDeleteUser(u)" class="text-red-500 hover:text-red-700 font-semibold p-1.5 rounded hover:bg-red-50 transition" title="Eliminar Colaborador">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                          </button>
+                        </template>
+                      </div>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- TAB 6: FERIADOS -->
+      <div x-show="activeTab === 'holidays'" class="space-y-6">
+        <div class="flex justify-between items-center">
+          <div>
+            <h2 class="text-xl font-bold text-slate-900 flex items-center gap-2">
+              <i data-lucide="flag" class="w-5 h-5 text-blue-600"></i>
+              Feriados Nacionais & Pontes da Empresa
+            </h2>
+            <p class="text-xs text-slate-500">Feriados configurados são automaticamente descontados no cálculo de dias úteis.</p>
+          </div>
+          <button @click="openHolidayModal = true" class="text-xs font-bold text-slate-800 bg-white border border-slate-200 hover:bg-slate-50 px-3.5 py-2 rounded-xl shadow-sm transition flex items-center gap-1.5">
+            <i data-lucide="plus" class="w-4 h-4"></i> Adicionar Feriado / Ponte
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <template x-for="h in holidays" :key="h.id">
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold text-sm">
+                  <i data-lucide="sun" class="w-5 h-5"></i>
+                </div>
+                <div>
+                  <h4 class="font-bold text-xs text-slate-800" x-text="h.name"></h4>
+                  <p class="text-[11px] text-slate-500 font-medium" x-text="formatHolidayDate(h.date)"></p>
+                </div>
+              </div>
+              <button @click="deleteHoliday(h.id)" class="text-slate-400 hover:text-red-500 p-1.5 rounded transition" title="Remover">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </template>
+        </div>
+      </div>
+
+    </main>
+
   </div>
 
-  <!-- MODAL 1: NOVO PEDIDO DE FÉRIAS (COM CÁLCULO E DETEÇÃO DE CONFLITOS EM TEMPO REAL) -->
-  <div x-show="showNewRequestModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" x-transition.opacity>
-    <div class="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden" @click.away="showNewRequestModal = false">
-      
+  <!-- MODAL: NOVO PEDIDO DE FÉRIAS -->
+  <div x-show="showNewRequestModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" x-transition.opacity>
+    <div class="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden" @click.away="showNewRequestModal = false">
       <div class="p-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white flex justify-between items-center">
         <div>
           <h3 class="font-bold text-lg">Novo Pedido de Ausência</h3>
@@ -943,7 +894,6 @@
       </div>
 
       <form @submit.prevent="submitLeaveRequest()" class="p-6 space-y-4">
-        
         <div>
           <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Tipo de Ausência</label>
           <select x-model="newRequest.type" class="w-full text-xs font-medium border border-slate-300 rounded-xl px-3 py-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none">
@@ -966,30 +916,23 @@
           </div>
         </div>
 
-        <!-- PAINEL DE CÁLCULO E DETEÇÃO DE CONFLITOS EM TEMPO REAL -->
         <div class="bg-blue-50 p-4 rounded-xl border border-blue-100 space-y-2">
           <div class="flex justify-between items-center">
-            <span class="text-xs font-semibold text-blue-900">Total de Dias Úteis a Debitar:</span>
+            <span class="text-xs font-semibold text-blue-900">Dias Úteis a Debitar:</span>
             <span class="text-sm font-black text-blue-700" x-text="calculatedDays + ' dias'"></span>
           </div>
           <div class="flex justify-between items-center text-[11px] text-blue-800">
-            <span>Saldo Atual Restante:</span>
+            <span>Saldo Restante Atual:</span>
             <span class="font-bold" x-text="(currentUser?.balances?.remaining_days ?? 22) + ' dias'"></span>
           </div>
           
-          <!-- Aviso de Saldo Insuficiente -->
           <div x-show="newRequest.type === 'ferias' && calculatedDays > (currentUser?.balances?.remaining_days ?? 0)" class="p-2 rounded bg-red-100 text-red-700 text-xs font-semibold flex items-center gap-1.5">
-            <i data-lucide="alert-circle" class="w-4 h-4 shrink-0"></i>
-            Saldo insuficiente para cobrir estes dias!
+            <i data-lucide="alert-circle" class="w-4 h-4 shrink-0"></i> Saldo insuficiente!
           </div>
 
-          <!-- Alerta de Conflitos na Equipa no Modal -->
           <template x-if="requestConflicts.length > 0">
             <div class="mt-2 p-2.5 rounded bg-amber-100 text-amber-900 text-xs space-y-1">
-              <p class="font-bold flex items-center gap-1">
-                <i data-lucide="users" class="w-3.5 h-3.5"></i>
-                Colegas de equipa com ausências nestas datas:
-              </p>
+              <p class="font-bold flex items-center gap-1"><i data-lucide="users" class="w-3.5 h-3.5"></i> Colegas com férias nestas datas:</p>
               <template x-for="c in requestConflicts" :key="c.id">
                 <p class="text-[11px] pl-4">• <span class="font-semibold" x-text="c.user_name"></span> (<span x-text="formatDateShort(c.start_date) + ' a ' + formatDateShort(c.end_date)"></span>)</p>
               </template>
@@ -998,36 +941,60 @@
         </div>
 
         <div>
-          <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Motivo / Observações (Opcional)</label>
-          <textarea x-model="newRequest.reason" rows="2" placeholder="Ex: Férias de Verão em Família" class="w-full text-xs font-medium border border-slate-300 rounded-xl px-3 py-2 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+          <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Motivo / Observações</label>
+          <textarea x-model="newRequest.reason" rows="2" placeholder="Ex: Férias de Verão" class="w-full text-xs font-medium border border-slate-300 rounded-xl px-3 py-2 bg-slate-50 focus:bg-white outline-none"></textarea>
         </div>
 
         <div class="flex justify-end gap-2 pt-2">
-          <button type="button" @click="showNewRequestModal = false" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition">Cancelar</button>
-          <button type="submit" :disabled="calculatedDays <= 0" class="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 shadow-md shadow-blue-500/20 transition">
+          <button type="button" @click="showNewRequestModal = false" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100">Cancelar</button>
+          <button type="submit" :disabled="calculatedDays <= 0" class="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-md transition">
             Submeter Pedido
           </button>
         </div>
-
       </form>
-
     </div>
   </div>
 
-  <!-- MODAL 2: REJEITAR PEDIDO (GESTOR) -->
-  <div x-show="showRejectModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" x-transition.opacity>
-    <div class="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 p-6 space-y-4" @click.away="showRejectModal = false">
+  <!-- MODAL: SOLICITAR CANCELAMENTO DE FÉRIAS (COLABORADOR) -->
+  <div x-show="showCancellationModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" x-transition.opacity>
+    <div class="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-200 p-6 space-y-4" @click.away="showCancellationModal = false">
+      <div class="flex items-center gap-3 text-orange-600">
+        <div class="p-2 bg-orange-100 rounded-xl"><i data-lucide="rotate-ccw" class="w-6 h-6"></i></div>
+        <div>
+          <h3 class="font-bold text-base text-slate-900">Pedir Cancelamento de Férias</h3>
+          <p class="text-xs text-slate-500">Os dias serão devolvidos ao seu saldo após aprovação</p>
+        </div>
+      </div>
+
+      <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs">
+        <p class="text-slate-700 font-semibold" x-text="'Período: ' + formatDateRange(targetRequestToCancel?.start_date, targetRequestToCancel?.end_date)"></p>
+        <p class="text-blue-600 font-bold mt-0.5" x-text="'Duração: ' + targetRequestToCancel?.business_days + ' dias úteis'"></p>
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Motivo do Cancelamento</label>
+        <textarea x-model="cancellationReason" rows="3" placeholder="Ex: Alteração de planos familiares." class="w-full text-xs border border-slate-300 rounded-xl p-3 bg-slate-50 focus:bg-white outline-none"></textarea>
+      </div>
+
+      <div class="flex justify-end gap-2">
+        <button @click="showCancellationModal = false" class="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl">Voltar</button>
+        <button @click="confirmSubmitCancellation()" class="px-4 py-2 text-xs font-bold text-white bg-orange-600 hover:bg-orange-700 rounded-xl shadow">Enviar Pedido de Anulação</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: REJEITAR PEDIDO (GESTOR) -->
+  <div x-show="showRejectModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" x-transition.opacity>
+    <div class="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-200 p-6 space-y-4" @click.away="showRejectModal = false">
       <div class="flex items-center gap-3 text-red-600">
         <div class="p-2 bg-red-100 rounded-xl"><i data-lucide="x-circle" class="w-6 h-6"></i></div>
         <h3 class="font-bold text-base text-slate-900">Rejeitar Pedido de Férias</h3>
       </div>
-      <p class="text-xs text-slate-500">Indique o motivo da recusa para que o colaborador seja notificado.</p>
-      
+      <p class="text-xs text-slate-500">Indique o motivo da recusa para que o colaborador seja informado.</p>
       <div>
         <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Motivo da Recusa</label>
         <textarea x-model="rejectComment" rows="3" placeholder="Ex: Cobertura mínima de equipa insuficiente neste período." class="w-full text-xs border border-slate-300 rounded-xl p-3 bg-slate-50 focus:bg-white outline-none"></textarea>
       </div>
-
       <div class="flex justify-end gap-2">
         <button @click="showRejectModal = false" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100">Cancelar</button>
         <button @click="confirmReject()" class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-red-600 hover:bg-red-700">Confirmar Recusa</button>
@@ -1035,8 +1002,8 @@
     </div>
   </div>
 
-  <!-- MODAL 3: NOVO / EDITAR COLABORADOR (PAINEL ADMIN) -->
-  <div x-show="showUserModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" x-transition.opacity>
+  <!-- MODAL: NOVO / EDITAR COLABORADOR (ADMIN) -->
+  <div x-show="showUserModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" x-transition.opacity>
     <div class="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden" @click.away="showUserModal = false">
       <div class="p-5 bg-slate-900 text-white flex justify-between items-center">
         <div>
@@ -1080,7 +1047,7 @@
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-xs font-bold text-slate-700 mb-1">Cargo / Função</label>
-            <input type="text" x-model="userForm.job_title" placeholder="Ex: Engenheiro de Software" class="w-full text-xs border border-slate-300 rounded-xl px-3 py-2 bg-slate-50 focus:bg-white outline-none">
+            <input type="text" x-model="userForm.job_title" placeholder="Ex: Software Engineer" class="w-full text-xs border border-slate-300 rounded-xl px-3 py-2 bg-slate-50 focus:bg-white outline-none">
           </div>
           <div>
             <label class="block text-xs font-bold text-slate-700 mb-1">Dotação de Férias (Dias/Ano)</label>
@@ -1098,14 +1065,14 @@
     </div>
   </div>
 
-  <!-- MODAL 4: ADICIONAR FERIADO -->
-  <div x-show="openHolidayModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" x-transition.opacity>
+  <!-- MODAL: ADICIONAR FERIADO -->
+  <div x-show="openHolidayModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" x-transition.opacity>
     <div class="bg-white rounded-2xl max-w-sm w-full shadow-2xl border border-slate-200 p-6 space-y-4" @click.away="openHolidayModal = false">
       <h3 class="font-bold text-sm text-slate-900">Novo Feriado ou Ponte</h3>
       <form @submit.prevent="addHoliday()" class="space-y-3">
         <div>
           <label class="block text-xs font-bold text-slate-700 mb-1">Nome</label>
-          <input type="text" x-model="newHoliday.name" placeholder="Ex: Feriado Municipal de Lisboa" required class="w-full text-xs border border-slate-300 rounded-xl px-3 py-2 bg-slate-50">
+          <input type="text" x-model="newHoliday.name" placeholder="Ex: Feriado Municipal" required class="w-full text-xs border border-slate-300 rounded-xl px-3 py-2 bg-slate-50">
         </div>
         <div>
           <label class="block text-xs font-bold text-slate-700 mb-1">Data</label>
@@ -1131,6 +1098,9 @@
       return {
         activeTab: 'dashboard',
         currentUser: null,
+        loadingApp: true,
+        loggingIn: false,
+        loginError: '',
         users: [],
         departments: [],
         holidays: [],
@@ -1145,7 +1115,6 @@
           upcoming_leaves: []
         },
         
-        // Calendar & Gantt
         calendarInstance: null,
         calendarViewMode: 'grid',
         ganttCurrentDate: new Date(),
@@ -1153,11 +1122,10 @@
         ganttMonthLabel: '',
         calendarEvents: [],
 
-        // Modais
         showNewRequestModal: false,
         showRejectModal: false,
+        showCancellationModal: false,
         showUserModal: false,
-        openLoginModal: false,
         isEditingUser: false,
         openHolidayModal: false,
 
@@ -1175,6 +1143,8 @@
         calculatedDays: 0,
         requestConflicts: [],
         selectedRequestForAction: null,
+        targetRequestToCancel: null,
+        cancellationReason: '',
         rejectComment: '',
 
         userForm: {
@@ -1205,18 +1175,13 @@
         },
 
         async initApp() {
+          this.loadingApp = true;
           await this.loadCurrentUser();
-          await this.loadUsers();
-          await this.loadDepartments();
-          await this.loadHolidays();
-          await this.loadStats();
-          await this.loadMyRequests();
-          await this.loadApprovalRequests();
-          this.setupGanttDays();
-          
-          this.$nextTick(() => {
-            lucide.createIcons();
-          });
+          if (this.currentUser) {
+            await this.loadInitialData();
+          }
+          this.loadingApp = false;
+          this.$nextTick(() => lucide.createIcons());
         },
 
         async loadCurrentUser() {
@@ -1224,11 +1189,30 @@
             const res = await fetch('/api/auth/current');
             if (res.ok) {
               this.currentUser = await res.json();
+            } else {
+              this.currentUser = null;
             }
-          } catch(e) { console.error(e); }
+          } catch(e) {
+            this.currentUser = null;
+          }
+        },
+
+        async loadInitialData() {
+          await Promise.all([
+            this.loadUsers(),
+            this.loadDepartments(),
+            this.loadHolidays(),
+            this.loadStats(),
+            this.loadMyRequests(),
+            this.loadApprovalRequests()
+          ]);
+          this.setupGanttDays();
+          this.$nextTick(() => lucide.createIcons());
         },
 
         async performLogin() {
+          this.loggingIn = true;
+          this.loginError = '';
           try {
             const res = await fetch('/api/auth/login', {
               method: 'POST',
@@ -1237,81 +1221,75 @@
             });
             const data = await res.json();
             if (!res.ok) {
-              alert(data.detail || 'Email ou palavra-passe incorretos');
+              this.loginError = data.detail || 'Email ou palavra-passe incorretos.';
+              this.loggingIn = false;
               return;
             }
             this.currentUser = data.user;
-            this.openLoginModal = false;
             this.showNotification(`Sessão iniciada como ${this.currentUser.name}`);
-            await this.loadStats();
-            await this.loadMyRequests();
-            await this.loadApprovalRequests();
-            this.$nextTick(() => lucide.createIcons());
-          } catch(e) { console.error(e); }
+            await this.loadInitialData();
+          } catch(e) {
+            this.loginError = 'Erro ao ligar ao servidor.';
+          } finally {
+            this.loggingIn = false;
+          }
         },
 
-        async switchUser(userId) {
+        async performLogout() {
           try {
-            const res = await fetch('/api/auth/switch', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ user_id: userId })
-            });
-            const data = await res.json();
-            this.currentUser = data.user;
-            this.showNotification(`Sessão alterada para ${this.currentUser.name} (${this.currentUser.role})`);
-            await this.loadStats();
-            await this.loadMyRequests();
-            await this.loadApprovalRequests();
-            this.$nextTick(() => lucide.createIcons());
-          } catch(e) { console.error(e); }
+            await fetch('/api/auth/logout', { method: 'POST' });
+          } catch(e) {}
+          this.currentUser = null;
+          this.loginForm.email = '';
+          this.loginForm.password = '1234';
+          this.showNotification('Sessão terminada.');
         },
 
         async loadUsers() {
           try {
             const res = await fetch('/api/users');
-            this.users = await res.json();
-          } catch(e) { console.error(e); }
+            if (res.ok) this.users = await res.json();
+          } catch(e) {}
         },
 
         async loadDepartments() {
           try {
             const res = await fetch('/api/departments');
-            this.departments = await res.json();
-          } catch(e) { console.error(e); }
+            if (res.ok) this.departments = await res.json();
+          } catch(e) {}
         },
 
         async loadHolidays() {
           try {
             const res = await fetch('/api/holidays');
-            this.holidays = await res.json();
-          } catch(e) { console.error(e); }
+            if (res.ok) this.holidays = await res.json();
+          } catch(e) {}
         },
 
         async loadStats() {
           try {
             const res = await fetch('/api/stats');
-            this.stats = await res.json();
-          } catch(e) { console.error(e); }
+            if (res.ok) this.stats = await res.json();
+          } catch(e) {}
         },
 
         async loadMyRequests() {
           if (!this.currentUser) return;
           try {
             const res = await fetch(`/api/requests?user_id=${this.currentUser.id}`);
-            this.myRequests = await res.json();
-          } catch(e) { console.error(e); }
+            if (res.ok) this.myRequests = await res.json();
+          } catch(e) {}
         },
 
         async loadApprovalRequests() {
           try {
-            let url = '/api/requests?status=pendente';
-            if (this.currentUser?.role === 'gestor' && this.currentUser?.department_id) {
-              url += `&department_id=${this.currentUser.department_id}`;
-            }
+            let url = '/api/requests';
             const res = await fetch(url);
-            this.pendingApprovals = await res.json();
-          } catch(e) { console.error(e); }
+            if (res.ok) {
+              const all = await res.json();
+              this.pendingApprovals = all.filter(r => r.status === 'pendente' || r.status === 'cancelamento_pendente');
+            }
+          } catch(e) {}
         },
 
         openNewRequestModal() {
@@ -1340,7 +1318,7 @@
             this.calculatedDays = data.business_days;
             this.requestConflicts = data.conflicts || [];
             this.$nextTick(() => lucide.createIcons());
-          } catch(e) { console.error(e); }
+          } catch(e) {}
         },
 
         async submitLeaveRequest() {
@@ -1364,26 +1342,99 @@
             }
             this.showNewRequestModal = false;
             confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
-            this.showNotification('Pedido de férias submetido com sucesso!');
+            this.showNotification('Pedido de férias registado!');
             await this.loadCurrentUser();
             await this.loadStats();
             await this.loadMyRequests();
             await this.loadApprovalRequests();
             this.renderCalendar();
-          } catch(e) { console.error(e); }
+          } catch(e) {}
         },
 
-        async cancelMyRequest(id) {
+        // --- FLUXO DE CANCELAMENTO ---
+        async cancelMyRequest(req) {
           if (!confirm('Tem a certeza que deseja cancelar este pedido?')) return;
           try {
-            const res = await fetch(`/api/requests/${id}/cancel`, { method: 'POST' });
+            const res = await fetch(`/api/requests/${req.id}/cancel`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ reason: 'Cancelado pelo utilizador' })
+            });
+            const data = await res.json();
             if (res.ok) {
-              this.showNotification('Pedido cancelado.');
+              this.showNotification(data.message);
               await this.loadCurrentUser();
               await this.loadMyRequests();
               await this.loadStats();
+              this.renderCalendar();
             }
-          } catch(e) { console.error(e); }
+          } catch(e) {}
+        },
+
+        openRequestCancellationModal(req) {
+          this.targetRequestToCancel = req;
+          this.cancellationReason = '';
+          this.showCancellationModal = true;
+          this.$nextTick(() => lucide.createIcons());
+        },
+
+        async confirmSubmitCancellation() {
+          if (!this.targetRequestToCancel) return;
+          try {
+            const res = await fetch(`/api/requests/${this.targetRequestToCancel.id}/cancel`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ reason: this.cancellationReason })
+            });
+            const data = await res.json();
+            if (res.ok) {
+              this.showCancellationModal = false;
+              this.showNotification('Pedido de anulação enviado à gestão.');
+              await this.loadCurrentUser();
+              await this.loadMyRequests();
+              await this.loadStats();
+              await this.loadApprovalRequests();
+              this.renderCalendar();
+            } else {
+              alert(data.detail || 'Erro ao pedir cancelamento.');
+            }
+          } catch(e) {}
+        },
+
+        async approveCancellation(id) {
+          try {
+            const res = await fetch(`/api/requests/${id}/approve-cancel`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ manager_comment: 'Cancelamento aprovado. Dias devolvidos ao saldo.' })
+            });
+            const data = await res.json();
+            if (res.ok) {
+              this.showNotification('Cancelamento aprovado e dias devolvidos ao saldo!');
+              await this.loadApprovalRequests();
+              await this.loadStats();
+              await this.loadUsers();
+              await this.loadCurrentUser();
+              this.renderCalendar();
+            }
+          } catch(e) {}
+        },
+
+        async rejectCancellation(id) {
+          try {
+            const res = await fetch(`/api/requests/${id}/reject-cancel`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ manager_comment: 'Pedido de cancelamento recusado.' })
+            });
+            const data = await res.json();
+            if (res.ok) {
+              this.showNotification('Cancelamento recusado. As férias mantêm-se.');
+              await this.loadApprovalRequests();
+              await this.loadStats();
+              this.renderCalendar();
+            }
+          } catch(e) {}
         },
 
         async approveRequest(id) {
@@ -1395,13 +1446,14 @@
             });
             if (res.ok) {
               confetti({ particleCount: 60, spread: 50 });
-              this.showNotification('Pedido aprovado com sucesso!');
+              this.showNotification('Pedido aprovado!');
               await this.loadApprovalRequests();
               await this.loadStats();
               await this.loadUsers();
+              await this.loadCurrentUser();
               this.renderCalendar();
             }
-          } catch(e) { console.error(e); }
+          } catch(e) {}
         },
 
         openRejectModal(req) {
@@ -1425,7 +1477,7 @@
               await this.loadApprovalRequests();
               await this.loadStats();
             }
-          } catch(e) { console.error(e); }
+          } catch(e) {}
         },
 
         openNewUserModal() {
@@ -1461,7 +1513,7 @@
         },
 
         async confirmDeleteUser(u) {
-          if (!confirm(`Tem a certeza que deseja eliminar o colaborador "${u.name}" e todo o seu histórico de férias? Esta ação não pode ser desfeita.`)) return;
+          if (!confirm(`Tem a certeza que deseja eliminar o colaborador "${u.name}"? Todos os registos associados serão removidos.`)) return;
           try {
             const res = await fetch(`/api/users/${u.id}`, { method: 'DELETE' });
             const data = await res.json();
@@ -1473,7 +1525,7 @@
             } else {
               alert(data.detail || 'Erro ao eliminar colaborador');
             }
-          } catch(e) { console.error(e); }
+          } catch(e) {}
         },
 
         async saveUser() {
@@ -1502,7 +1554,7 @@
             this.showUserModal = false;
             await this.loadUsers();
             await this.loadCurrentUser();
-          } catch(e) { console.error(e); }
+          } catch(e) {}
         },
 
         async addHoliday() {
@@ -1517,7 +1569,7 @@
             this.showNotification('Feriado adicionado');
             await this.loadHolidays();
             this.renderCalendar();
-          } catch(e) { console.error(e); }
+          } catch(e) {}
         },
 
         async deleteHoliday(id) {
@@ -1527,10 +1579,9 @@
             this.showNotification('Feriado removido');
             await this.loadHolidays();
             this.renderCalendar();
-          } catch(e) { console.error(e); }
+          } catch(e) {}
         },
 
-        // --- Calendário & Gantt ---
         renderCalendarAfterTab() {
           setTimeout(() => {
             this.renderCalendar();
@@ -1602,7 +1653,6 @@
           return ev ? `${ev.title} (${ev.extendedProps?.status})` : '';
         },
 
-        // Helpers de Formatação
         getInitials(name) {
           if (!name) return '??';
           const parts = name.split(' ');
@@ -1618,6 +1668,17 @@
             'outro': 'Outro'
           };
           return map[type] || type;
+        },
+
+        formatStatusLabel(status) {
+          const map = {
+            'pendente': 'Pendente',
+            'aprovado': 'Aprovado',
+            'cancelamento_pendente': 'A aguardar cancelamento',
+            'cancelado': 'Cancelado',
+            'rejeitado': 'Rejeitado'
+          };
+          return map[status] || status;
         },
 
         formatDateShort(d) {

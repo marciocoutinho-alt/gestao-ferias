@@ -1,5 +1,4 @@
 import os
-import sqlite3
 from datetime import datetime, date, timedelta
 from typing import Optional, List
 from fastapi import FastAPI, Request, Response, HTTPException, Query, Body, Cookie
@@ -8,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from .database import get_db_connection, init_db
+from .database import get_db_connection, init_db, convert_query_for_engine, IS_POSTGRES
 from .services import (
     calculate_business_days,
     get_user_balances,
@@ -22,7 +21,6 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
 
-# Garantir existência de pastas
 os.makedirs(STATIC_DIR, exist_ok=True)
 os.makedirs(TEMPLATES_DIR, exist_ok=True)
 
@@ -31,12 +29,11 @@ app = FastAPI(title="Gestão de Férias da Equipa", description="API e Interface
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
-# Inicializar BD
 @app.on_event("startup")
 def on_startup():
     init_db()
 
-# Modelos Pydantic para validação
+# Modelos Pydantic
 class UserLogin(BaseModel):
     email: str
     password: Optional[str] = "1234"
@@ -45,7 +42,7 @@ class UserCreate(BaseModel):
     name: str
     email: str
     password: Optional[str] = "1234"
-    role: str # 'colaborador', 'gestor', 'admin'
+    role: str
     department_id: Optional[int] = None
     total_vacation_days: Optional[int] = 22
     job_title: Optional[str] = ""
@@ -72,25 +69,28 @@ class HolidayCreate(BaseModel):
 
 class LeaveRequestCreate(BaseModel):
     user_id: int
-    type: str # 'ferias', 'baixa', 'parental', 'formacao', 'outro'
-    start_date: str # YYYY-MM-DD
-    end_date: str # YYYY-MM-DD
+    type: str
+    start_date: str
+    end_date: str
     reason: Optional[str] = ""
 
 class ApprovalAction(BaseModel):
     manager_comment: Optional[str] = ""
+
+class CancelRequestAction(BaseModel):
+    reason: Optional[str] = ""
 
 # --- Rotas de Autenticação / Sessão Ativa ---
 
 def get_current_user_from_db(user_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("""
+    cursor.execute(convert_query_for_engine("""
     SELECT u.*, d.name as department_name, d.color as department_color
     FROM users u
     LEFT JOIN departments d ON u.department_id = d.id
-    WHERE u.id = ? AND u.is_active = 1
-    """, (user_id,))
+    WHERE u.id = ? AND (u.is_active = TRUE OR u.is_active = 1)
+    """), (user_id,))
     user = cursor.fetchone()
     conn.close()
     if user:
@@ -99,61 +99,51 @@ def get_current_user_from_db(user_id: int):
 
 @app.get("/api/auth/current")
 def get_current_user(active_user_id: Optional[int] = Cookie(default=None)):
-    if active_user_id:
-        user = get_current_user_from_db(active_user_id)
-        if user:
-            user["balances"] = get_user_balances(user["id"])
-            return user
+    """Obrigatório autenticação: só devolve dados se houver sessão iniciada."""
+    if not active_user_id:
+        raise HTTPException(status_code=401, detail="Sessão não iniciada. Por favor faça login.")
     
-    # Fallback para o primeiro utilizador (para facilitar início)
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id FROM users WHERE is_active = 1 LIMIT 1")
-    first = cursor.fetchone()
-    conn.close()
-    if first:
-        user = get_current_user_from_db(first["id"])
-        if user:
-            user["balances"] = get_user_balances(user["id"])
-            return user
-    return None
+    user = get_current_user_from_db(active_user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="Utilizador não encontrado ou inativo.")
+    
+    user["balances"] = get_user_balances(user["id"])
+    return user
 
 @app.post("/api/auth/login")
 def login(credentials: UserLogin, response: Response):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE email = ? AND is_active = 1", (credentials.email.strip().lower(),))
+    cursor.execute(convert_query_for_engine("""
+    SELECT * FROM users WHERE email = ? AND (is_active = TRUE OR is_active = 1)
+    """), (credentials.email.strip().lower(),))
     user = cursor.fetchone()
     conn.close()
 
     if not user:
-        raise HTTPException(status_code=401, detail="Email não encontrado ou colaborador inativo")
+        raise HTTPException(status_code=401, detail="Email não registado no sistema.")
 
     user_dict = dict(user)
-    # Validação simples de password (padrão '1234')
+    # Validação de palavra-passe
     if user_dict.get("password") and user_dict.get("password") != credentials.password:
-        raise HTTPException(status_code=401, detail="Palavra-passe incorreta (predefinida: 1234)")
+        raise HTTPException(status_code=401, detail="Palavra-passe incorreta.")
 
-    response.set_cookie(key="active_user_id", value=str(user["id"]), httponly=False, samesite="lax")
-    user_dict["balances"] = get_user_balances(user["id"])
-    return {"message": f"Bem-vindo(a), {user['name']}", "user": user_dict}
+    response.set_cookie(
+        key="active_user_id",
+        value=str(user_dict["id"]),
+        httponly=False,
+        samesite="lax",
+        max_age=60*60*24*30 # 30 dias de sessão
+    )
+    user_dict["balances"] = get_user_balances(user_dict["id"])
+    return {"message": f"Bem-vindo(a), {user_dict['name']}", "user": user_dict}
 
 @app.post("/api/auth/logout")
 def logout(response: Response):
     response.delete_cookie(key="active_user_id")
     return {"message": "Sessão terminada com sucesso"}
 
-@app.post("/api/auth/switch")
-def switch_user(response: Response, user_id: int = Body(..., embed=True)):
-    user = get_current_user_from_db(user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="Utilizador não encontrado")
-    
-    response.set_cookie(key="active_user_id", value=str(user_id), httponly=False, samesite="lax")
-    user["balances"] = get_user_balances(user_id)
-    return {"message": f"Sessão alterada para {user['name']}", "user": user}
-
-# --- Rotas de Gestão de Utilizadores (CRUD Completo de Admin) ---
+# --- Rotas de Utilizadores e Departamentos (Admin) ---
 
 @app.get("/api/users")
 def list_users():
@@ -165,7 +155,7 @@ def list_users():
            d.name as department_name, d.color as department_color
     FROM users u
     LEFT JOIN departments d ON u.department_id = d.id
-    WHERE u.is_active = 1
+    WHERE u.is_active = TRUE OR u.is_active = 1
     ORDER BY u.name ASC
     """)
     users = [dict(row) for row in cursor.fetchall()]
@@ -177,14 +167,14 @@ def list_users():
     return users
 
 @app.post("/api/users")
-def create_user(user: UserCreate, active_user_id: Optional[int] = Cookie(default=1)):
+def create_user(user: UserCreate):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("""
+        cursor.execute(convert_query_for_engine("""
         INSERT INTO users (name, email, password, role, department_id, total_vacation_days, job_title, avatar_color)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
+        """), (
             user.name.strip(),
             user.email.strip().lower(),
             user.password or "1234",
@@ -195,12 +185,11 @@ def create_user(user: UserCreate, active_user_id: Optional[int] = Cookie(default
             user.avatar_color or "#3B82F6"
         ))
         conn.commit()
-        new_id = cursor.lastrowid
-    except sqlite3.IntegrityError:
+    except Exception as e:
         conn.close()
-        raise HTTPException(status_code=400, detail="Este email já se encontra registado no sistema.")
+        raise HTTPException(status_code=400, detail="Este email já se encontra registado.")
     conn.close()
-    return {"id": new_id, "message": f"Colaborador {user.name} criado com sucesso (Dotação: {user.total_vacation_days or 22} dias)"}
+    return {"message": f"Colaborador {user.name} criado com sucesso ({user.total_vacation_days or 22} dias/ano)"}
 
 @app.put("/api/users/{user_id}")
 def update_user(user_id: int, update: UserUpdate):
@@ -232,39 +221,34 @@ def update_user(user_id: int, update: UserUpdate):
         values.append(update.job_title)
     if update.is_active is not None:
         fields.append("is_active = ?")
-        values.append(1 if update.is_active else 0)
+        values.append(True if update.is_active else False)
 
     if not fields:
         conn.close()
         return {"message": "Sem alterações"}
 
     values.append(user_id)
-    cursor.execute(f"UPDATE users SET {', '.join(fields)} WHERE id = ?", values)
+    query_str = f"UPDATE users SET {', '.join(fields)} WHERE id = ?"
+    cursor.execute(convert_query_for_engine(query_str), values)
     conn.commit()
     conn.close()
     return {"message": "Dados do colaborador atualizados com sucesso"}
 
 @app.delete("/api/users/{user_id}")
-def delete_user(user_id: int, active_user_id: Optional[int] = Cookie(default=1)):
-    """Elimina um colaborador e os seus pedidos de férias."""
+def delete_user(user_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
-
-    # Verificar se utilizador existe
-    cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+    cursor.execute(convert_query_for_engine("SELECT * FROM users WHERE id = ?"), (user_id,))
     target = cursor.fetchone()
     if not target:
         conn.close()
         raise HTTPException(status_code=404, detail="Colaborador não encontrado")
 
-    # Eliminar pedidos associados e utilizador
-    cursor.execute("DELETE FROM leave_requests WHERE user_id = ?", (user_id,))
-    cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    cursor.execute(convert_query_for_engine("DELETE FROM leave_requests WHERE user_id = ?"), (user_id,))
+    cursor.execute(convert_query_for_engine("DELETE FROM users WHERE id = ?"), (user_id,))
     conn.commit()
     conn.close()
-    return {"message": f"Colaborador {target['name']} eliminado com sucesso"}
-
-# --- Rotas de Departamentos ---
+    return {"message": f"Colaborador {dict(target)['name']} eliminado com sucesso"}
 
 @app.get("/api/departments")
 def list_departments():
@@ -273,8 +257,8 @@ def list_departments():
     cursor.execute("""
     SELECT d.*, COUNT(u.id) as members_count
     FROM departments d
-    LEFT JOIN users u ON u.department_id = d.id AND u.is_active = 1
-    GROUP BY d.id
+    LEFT JOIN users u ON u.department_id = d.id AND (u.is_active = TRUE OR u.is_active = 1)
+    GROUP BY d.id, d.name, d.color, d.created_at
     ORDER BY d.name ASC
     """)
     depts = [dict(row) for row in cursor.fetchall()]
@@ -285,11 +269,10 @@ def list_departments():
 def create_department(dept: DepartmentCreate):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO departments (name, color) VALUES (?, ?)", (dept.name, dept.color))
+    cursor.execute(convert_query_for_engine("INSERT INTO departments (name, color) VALUES (?, ?)"), (dept.name, dept.color))
     conn.commit()
-    new_id = cursor.lastrowid
     conn.close()
-    return {"id": new_id, "message": "Departamento criado com sucesso"}
+    return {"message": "Departamento criado com sucesso"}
 
 # --- Rotas de Feriados ---
 
@@ -307,8 +290,8 @@ def add_holiday(holiday: HolidayCreate):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("INSERT INTO holidays (date, name, is_national) VALUES (?, ?, ?)",
-                       (holiday.date, holiday.name, 1 if holiday.is_national else 0))
+        cursor.execute(convert_query_for_engine("INSERT INTO holidays (date, name, is_national) VALUES (?, ?, ?)"),
+                       (holiday.date, holiday.name, True if holiday.is_national else False))
         conn.commit()
     except Exception:
         conn.close()
@@ -320,12 +303,12 @@ def add_holiday(holiday: HolidayCreate):
 def delete_holiday(holiday_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM holidays WHERE id = ?", (holiday_id,))
+    cursor.execute(convert_query_for_engine("DELETE FROM holidays WHERE id = ?"), (holiday_id,))
     conn.commit()
     conn.close()
     return {"message": "Feriado removido"}
 
-# --- Rotas de Cálculo & Pré-Visualização de Pedidos ---
+# --- Rotas de Cálculo & Pré-Visualização ---
 
 @app.get("/api/requests/calculate")
 def preview_request_calculation(
@@ -334,7 +317,6 @@ def preview_request_calculation(
     end_date: str,
     exclude_request_id: Optional[int] = None
 ):
-    """Calcula dias úteis e deteta sobreposições/conflitos antes de submeter."""
     business_days = calculate_business_days(start_date, end_date)
     conflicts = detect_conflicts(user_id, start_date, end_date, exclude_request_id)
     balances = get_user_balances(user_id)
@@ -349,7 +331,7 @@ def preview_request_calculation(
         "remaining_after": max(0, balances.get("remaining_days", 0) - business_days) if balances else 0
     }
 
-# --- Rotas de Pedidos de Férias (CRUD & Aprovações) ---
+# --- Rotas de Pedidos de Férias & Fluxo de Cancelamento ---
 
 @app.get("/api/requests")
 def list_requests(
@@ -384,17 +366,17 @@ def list_requests(
         query += " AND lr.status = ?"
         params.append(status)
     if year:
-        query += " AND (strftime('%Y', lr.start_date) = ? OR strftime('%Y', lr.end_date) = ?)"
-        params.extend([str(year), str(year)])
+        query += " AND (lr.start_date LIKE ? OR lr.end_date LIKE ?)"
+        params.extend([f"{year}%", f"{year}%"])
 
     query += " ORDER BY lr.start_date DESC"
 
-    cursor.execute(query, params)
+    cursor.execute(convert_query_for_engine(query), params)
     requests_list = [dict(row) for row in cursor.fetchall()]
     conn.close()
 
     for r in requests_list:
-        if r["status"] == "pendente":
+        if r["status"] in ("pendente", "cancelamento_pendente"):
             r["conflicts"] = detect_conflicts(r["user_id"], r["start_date"], r["end_date"], exclude_request_id=r["id"])
         else:
             r["conflicts"] = []
@@ -417,35 +399,35 @@ def create_leave_request(req: LeaveRequestCreate):
 
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("""
+    cursor.execute(convert_query_for_engine("""
     INSERT INTO leave_requests (user_id, type, start_date, end_date, business_days, status, reason)
     VALUES (?, ?, ?, ?, ?, 'pendente', ?)
-    """, (req.user_id, req.type, req.start_date, req.end_date, business_days, req.reason))
+    """), (req.user_id, req.type, req.start_date, req.end_date, business_days, req.reason))
     conn.commit()
-    new_id = cursor.lastrowid
     conn.close()
 
-    return {"id": new_id, "business_days": business_days, "message": "Pedido de férias registado com sucesso"}
+    return {"business_days": business_days, "message": "Pedido de férias registado com sucesso"}
 
 @app.post("/api/requests/{request_id}/approve")
 def approve_request(
     request_id: int,
     action: ApprovalAction,
-    active_user_id: Optional[int] = Cookie(default=1)
+    active_user_id: Optional[int] = Cookie(default=None)
 ):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM leave_requests WHERE id = ?", (request_id,))
+    cursor.execute(convert_query_for_engine("SELECT * FROM leave_requests WHERE id = ?"), (request_id,))
     req = cursor.fetchone()
     if not req:
         conn.close()
         raise HTTPException(status_code=404, detail="Pedido não encontrado")
 
-    cursor.execute("""
+    approver_id = active_user_id if isinstance(active_user_id, int) else None
+    cursor.execute(convert_query_for_engine("""
     UPDATE leave_requests
     SET status = 'aprovado', manager_comment = ?, approved_by = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
-    """, (action.manager_comment, active_user_id, request_id))
+    """), (action.manager_comment or "Aprovado", approver_id, request_id))
     conn.commit()
     conn.close()
     return {"message": "Pedido aprovado com sucesso"}
@@ -454,47 +436,121 @@ def approve_request(
 def reject_request(
     request_id: int,
     action: ApprovalAction,
-    active_user_id: Optional[int] = Cookie(default=1)
+    active_user_id: Optional[int] = Cookie(default=None)
 ):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM leave_requests WHERE id = ?", (request_id,))
+    cursor.execute(convert_query_for_engine("SELECT * FROM leave_requests WHERE id = ?"), (request_id,))
     req = cursor.fetchone()
     if not req:
         conn.close()
         raise HTTPException(status_code=404, detail="Pedido não encontrado")
 
-    cursor.execute("""
+    approver_id = active_user_id if isinstance(active_user_id, int) else None
+    cursor.execute(convert_query_for_engine("""
     UPDATE leave_requests
     SET status = 'rejeitado', manager_comment = ?, approved_by = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
-    """, (action.manager_comment or "Pedido recusado pela gestão", active_user_id, request_id))
+    """), (action.manager_comment or "Pedido recusado pela gestão", approver_id, request_id))
     conn.commit()
     conn.close()
     return {"message": "Pedido rejeitado com sucesso"}
 
+# --- FLUXO DE PEDIDO E APROVAÇÃO DE CANCELAMENTO ---
+
 @app.post("/api/requests/{request_id}/cancel")
-def cancel_request(request_id: int):
+def request_or_perform_cancel(
+    request_id: int,
+    action: CancelRequestAction = Body(default=CancelRequestAction())
+):
+    """
+    Colaborador cancela o pedido:
+    - Se estiver 'pendente': cancela imediatamente.
+    - Se estiver 'aprovado': envia pedido de cancelamento para o Gestor aprovar ('cancelamento_pendente').
+    """
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM leave_requests WHERE id = ?", (request_id,))
+    cursor.execute(convert_query_for_engine("SELECT * FROM leave_requests WHERE id = ?"), (request_id,))
     req = cursor.fetchone()
     if not req:
         conn.close()
         raise HTTPException(status_code=404, detail="Pedido não encontrado")
 
-    if req["status"] not in ("pendente", "aprovado"):
-        conn.close()
-        raise HTTPException(status_code=400, detail="Apenas pedidos pendentes ou aprovados podem ser cancelados")
+    req_dict = dict(req)
+    current_status = req_dict["status"]
 
-    cursor.execute("""
-    UPDATE leave_requests
-    SET status = 'cancelado', updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-    """, (request_id,))
+    if current_status == "pendente":
+        cursor.execute(convert_query_for_engine("""
+        UPDATE leave_requests
+        SET status = 'cancelado', updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+        """), (request_id,))
+        msg = "Pedido de férias cancelado."
+    elif current_status == "aprovado":
+        reason_note = f"Solicitação de cancelamento: {action.reason}" if action.reason else "Solicitação de cancelamento pelo colaborador"
+        cursor.execute(convert_query_for_engine("""
+        UPDATE leave_requests
+        SET status = 'cancelamento_pendente', manager_comment = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+        """), (reason_note, request_id))
+        msg = "Pedido de cancelamento enviado para aprovação da gestão."
+    else:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Este pedido já se encontra cancelado ou rejeitado.")
+
     conn.commit()
     conn.close()
-    return {"message": "Pedido cancelado com sucesso"}
+    return {"message": msg}
+
+@app.post("/api/requests/{request_id}/approve-cancel")
+def approve_cancellation(
+    request_id: int,
+    action: ApprovalAction,
+    active_user_id: Optional[int] = Cookie(default=None)
+):
+    """Gestor aprova o cancelamento e devolve os dias ao saldo do colaborador."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(convert_query_for_engine("SELECT * FROM leave_requests WHERE id = ?"), (request_id,))
+    req = cursor.fetchone()
+    if not req:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Pedido não encontrado")
+
+    approver_id = active_user_id if isinstance(active_user_id, int) else None
+    cursor.execute(convert_query_for_engine("""
+    UPDATE leave_requests
+    SET status = 'cancelado', manager_comment = ?, approved_by = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+    """), (action.manager_comment or "Cancelamento aprovado pela gestão. Dias devolvidos ao saldo.", approver_id, request_id))
+    conn.commit()
+    conn.close()
+    return {"message": "Cancelamento aprovado. Os dias foram devolvidos ao saldo do colaborador."}
+
+@app.post("/api/requests/{request_id}/reject-cancel")
+def reject_cancellation(
+    request_id: int,
+    action: ApprovalAction,
+    active_user_id: Optional[int] = Cookie(default=None)
+):
+    """Gestor rejeita o cancelamento, mantendo o pedido 'aprovado'."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(convert_query_for_engine("SELECT * FROM leave_requests WHERE id = ?"), (request_id,))
+    req = cursor.fetchone()
+    if not req:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Pedido não encontrado")
+
+    approver_id = active_user_id if isinstance(active_user_id, int) else None
+    cursor.execute(convert_query_for_engine("""
+    UPDATE leave_requests
+    SET status = 'aprovado', manager_comment = ?, approved_by = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+    """), (action.manager_comment or "Pedido de cancelamento recusado pela gestão.", approver_id, request_id))
+    conn.commit()
+    conn.close()
+    return {"message": "Pedido de cancelamento recusado. As férias mantêm-se aprovadas."}
 
 # --- Calendário & Timeline Feed ---
 
@@ -508,7 +564,7 @@ def get_calendar_events():
     FROM leave_requests lr
     JOIN users u ON lr.user_id = u.id
     LEFT JOIN departments d ON u.department_id = d.id
-    WHERE lr.status IN ('aprovado', 'pendente')
+    WHERE lr.status IN ('aprovado', 'pendente', 'cancelamento_pendente')
     """)
     leaves = [dict(row) for row in cursor.fetchall()]
 
@@ -519,7 +575,7 @@ def get_calendar_events():
     events = []
 
     for l in leaves:
-        is_pending = (l["status"] == "pendente")
+        is_pending = (l["status"] in ('pendente', 'cancelamento_pendente'))
         type_labels = {
             "ferias": "Férias",
             "baixa": "Baixa Médica",
@@ -528,7 +584,8 @@ def get_calendar_events():
             "outro": "Outra Ausência"
         }
         type_label = type_labels.get(l["type"], l["type"])
-        title = f"{'⏳ [Pendente] ' if is_pending else ''}{l['user_name']} - {type_label}"
+        status_prefix = "⏳ [Pendente] " if l["status"] == "pendente" else ("⚠️ [A Cancelar] " if l["status"] == "cancelamento_pendente" else "")
+        title = f"{status_prefix}{l['user_name']} - {type_label}"
 
         if is_pending:
             bg_color = "#9CA3AF"
@@ -584,11 +641,11 @@ def get_calendar_events():
 # --- Dashboard & Relatórios ---
 
 @app.get("/api/stats")
-def get_stats(active_user_id: Optional[int] = Cookie(default=3)):
+def get_stats(active_user_id: Optional[int] = Cookie(default=None)):
     user = get_current_user_from_db(active_user_id) if active_user_id else None
     role = user["role"] if user else "colaborador"
     dept_id = user["department_id"] if user else None
-    uid = user["id"] if user else 1
+    uid = user["id"] if user else 0
     return get_dashboard_stats(uid, role, dept_id)
 
 @app.get("/api/export/csv")
@@ -608,8 +665,6 @@ def export_ics():
         media_type="text/calendar",
         headers={"Content-Disposition": "attachment; filename=ferias_equipa.ics"}
     )
-
-# --- Frontend HTML ---
 
 @app.get("/", response_class=HTMLResponse)
 def index_view(request: Request):
