@@ -527,6 +527,40 @@ def approve_cancellation(
     conn.close()
     return {"message": "Cancelamento aprovado. Os dias foram devolvidos ao saldo do colaborador."}
 
+@app.post("/api/requests/{request_id}/admin-cancel")
+def admin_cancel_request(
+    request_id: int,
+    action: CancelRequestAction = Body(default=CancelRequestAction()),
+    active_user_id: Optional[int] = Cookie(default=None)
+):
+    """Administrador cancela diretamente um pedido ou férias aprovadas."""
+    admin = get_current_user_from_db(active_user_id) if active_user_id else None
+    if not admin or admin.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Apenas administradores podem cancelar férias diretamente.")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(convert_query_for_engine("SELECT * FROM leave_requests WHERE id = ?"), (request_id,))
+    req = cursor.fetchone()
+    if not req:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Pedido não encontrado")
+    if dict(req)["status"] in ("cancelado", "rejeitado"):
+        conn.close()
+        raise HTTPException(status_code=400, detail="Este pedido já se encontra cancelado ou rejeitado.")
+
+    note = "Cancelado diretamente pelo administrador"
+    if action.reason and action.reason.strip():
+        note += f": {action.reason.strip()}"
+    cursor.execute(convert_query_for_engine("""
+    UPDATE leave_requests
+    SET status = 'cancelado', manager_comment = ?, approved_by = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+    """), (note, admin["id"], request_id))
+    conn.commit()
+    conn.close()
+    return {"message": "Férias canceladas pelo administrador. Os dias ficaram novamente disponíveis."}
+
 @app.post("/api/requests/{request_id}/reject-cancel")
 def reject_cancellation(
     request_id: int,
@@ -611,6 +645,7 @@ def get_calendar_events():
             "backgroundColor": bg_color,
             "borderColor": border_color,
             "extendedProps": {
+                "request_id": l["id"],
                 "user_id": l["user_id"],
                 "user_name": l["user_name"],
                 "dept_name": l["dept_name"],
