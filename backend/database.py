@@ -202,20 +202,20 @@ def seed_data(cursor, conn):
         """), (name, email, password, role, department_ids[department_name], days, avatar, title))
 
     holidays = [
-        ("2026-01-01", "Ano Novo", 1),
-        ("2026-02-17", "Carnaval (Terça-feira)", 0),
-        ("2026-04-03", "Sexta-feira Santa", 1),
-        ("2026-04-05", "Páscoa", 1),
-        ("2026-04-25", "Dia da Liberdade", 1),
-        ("2026-05-01", "Dia do Trabalhador", 1),
-        ("2026-06-04", "Corpo de Deus", 1),
-        ("2026-06-10", "Dia de Portugal", 1),
-        ("2026-08-15", "Assunção de Nossa Senhora", 1),
-        ("2026-10-05", "Implantação da República", 1),
-        ("2026-11-01", "Dia de Todos os Santos", 1),
-        ("2026-12-01", "Restauração da Independência", 1),
-        ("2026-12-08", "Dia da Imaculada Conceição", 1),
-        ("2026-12-25", "Natal", 1),
+        ("2026-01-01", "Ano Novo", True),
+        ("2026-02-17", "Carnaval (Terça-feira)", False),
+        ("2026-04-03", "Sexta-feira Santa", True),
+        ("2026-04-05", "Páscoa", True),
+        ("2026-04-25", "Dia da Liberdade", True),
+        ("2026-05-01", "Dia do Trabalhador", True),
+        ("2026-06-04", "Corpo de Deus", True),
+        ("2026-06-10", "Dia de Portugal", True),
+        ("2026-08-15", "Assunção de Nossa Senhora", True),
+        ("2026-10-05", "Implantação da República", True),
+        ("2026-11-01", "Dia de Todos os Santos", True),
+        ("2026-12-01", "Restauração da Independência", True),
+        ("2026-12-08", "Dia da Imaculada Conceição", True),
+        ("2026-12-25", "Natal", True),
     ]
     for h in holidays:
         if IS_POSTGRES:
