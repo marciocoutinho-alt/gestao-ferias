@@ -1603,11 +1603,44 @@
               eventClick: (info) => {
                 const props = info.event.extendedProps;
                 if (!props.is_holiday) {
-                  alert(`${info.event.title}\nPeríodo: ${info.event.startStr} até ${info.event.endStr}\nDias Úteis: ${props.business_days || '—'}\nEstado: ${props.status}`);
+                  const details = `${info.event.title}\nPeríodo: ${info.event.startStr} até ${info.event.endStr}\nDias Úteis: ${props.business_days || '—'}\nEstado: ${props.status}`;
+                  if (this.currentUser?.role === 'admin' && confirm(`${details}\n\nPretende cancelar estas férias diretamente?`)) {
+                    this.adminCancelRequest(props.request_id);
+                  } else if (this.currentUser?.role !== 'admin') {
+                    alert(details);
+                  }
                 }
               }
             });
             this.calendarInstance.render();
+          }
+        },
+
+        async adminCancelRequest(requestId) {
+          const reason = prompt('Motivo do cancelamento administrativo (opcional):', '') ?? null;
+          if (reason === null) return;
+          try {
+            const res = await fetch(`/api/requests/${requestId}/admin-cancel`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ reason })
+            });
+            const data = await res.json();
+            if (!res.ok) {
+              alert(data.detail || 'Não foi possível cancelar as férias.');
+              return;
+            }
+            this.showNotification(data.message);
+            await Promise.all([
+              this.loadCurrentUser(),
+              this.loadMyRequests(),
+              this.loadApprovalRequests(),
+              this.loadStats(),
+              this.loadUsers()
+            ]);
+            await this.renderCalendar();
+          } catch(e) {
+            alert('Erro ao ligar ao servidor.');
           }
         },
 
