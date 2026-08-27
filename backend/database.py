@@ -160,6 +160,23 @@ def init_db():
     if count == 0:
         seed_data(cursor, conn)
 
+    # Recuperação de acesso: a aplicação nunca deve ficar sem administrador.
+    # Se todos os administradores forem eliminados, promove o utilizador ativo
+    # mais antigo, preservando os restantes dados e pedidos existentes.
+    cursor.execute("SELECT COUNT(*) as count FROM users WHERE role = 'admin' AND is_active = TRUE")
+    row = cursor.fetchone()
+    admin_count = row["count"] if isinstance(row, dict) or hasattr(row, 'keys') else row[0]
+    if admin_count == 0:
+        cursor.execute("SELECT id FROM users WHERE is_active = TRUE ORDER BY created_at ASC, id ASC LIMIT 1")
+        recovery_user = cursor.fetchone()
+        if recovery_user:
+            recovery_user_id = recovery_user["id"] if isinstance(recovery_user, dict) or hasattr(recovery_user, 'keys') else recovery_user[0]
+            cursor.execute(
+                convert_query_for_engine("UPDATE users SET role = 'admin' WHERE id = ?"),
+                (recovery_user_id,)
+            )
+            conn.commit()
+
     conn.close()
 
 def seed_data(cursor, conn):
