@@ -1,12 +1,12 @@
 {
-  "name": "TeamVacay - Gestão de Férias",
-  "short_name": "TeamVacay",
+  "name": "Claudia Homes - Gestão de Férias",
+  "short_name": "CH Férias",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#2563eb",
   "orientation": "portrait",
-  "description": "Aplicação de Gestão de Férias e Ausências da Equipa",
+  "description": "Aplicação Claudia Homes para Gestão de Férias e Ausências da Equipa",
   "icons": [
     {
       "src": "https://cdn-icons-png.flaticon.com/512/2664/2664589.png",
