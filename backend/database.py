@@ -169,23 +169,37 @@ def seed_data(cursor, conn):
         ("Vendas & Marketing", "#F59E0B"),
         ("Financeiro & Operações", "#10B981")
     ]
-    for d in depts:
-        cursor.execute(convert_query_for_engine("INSERT INTO departments (name, color) VALUES (?, ?)"), d)
+    department_ids = {}
+    for name, color in depts:
+        cursor.execute(convert_query_for_engine("SELECT id FROM departments WHERE name = ?"), (name,))
+        existing = cursor.fetchone()
+        if existing:
+            department_ids[name] = existing["id"]
+        elif IS_POSTGRES:
+            cursor.execute(
+                "INSERT INTO departments (name, color) VALUES (%s, %s) RETURNING id",
+                (name, color)
+            )
+            department_ids[name] = cursor.fetchone()["id"]
+        else:
+            cursor.execute("INSERT INTO departments (name, color) VALUES (?, ?)", (name, color))
+            department_ids[name] = cursor.lastrowid
 
     users = [
-        ("Sofia Ramos", "sofia.rh@empresa.pt", "1234", "admin", 2, 22, "#EC4899", "Diretora de Recursos Humanos"),
-        ("Carlos Mendes", "carlos.mendes@empresa.pt", "1234", "gestor", 1, 22, "#3B82F6", "Lead Developer / Gestor TI"),
-        ("Ana Silva", "ana.silva@empresa.pt", "1234", "colaborador", 1, 22, "#6366F1", "Engenheira de Software Frontend"),
-        ("João Santos", "joao.santos@empresa.pt", "1234", "colaborador", 1, 22, "#14B8A6", "Engenheiro de Software Backend"),
-        ("Marta Ferreira", "marta.ferreira@empresa.pt", "1234", "gestor", 3, 22, "#F59E0B", "Gestora de Marketing"),
-        ("Pedro Oliveira", "pedro.oliveira@empresa.pt", "1234", "colaborador", 3, 22, "#8B5CF6", "Designer de Produto"),
-        ("Inês Costa", "ines.costa@empresa.pt", "1234", "colaborador", 4, 22, "#10B981", "Analista Financeira")
+        ("Sofia Ramos", "sofia.rh@empresa.pt", "1234", "admin", "Recursos Humanos", 22, "#EC4899", "Diretora de Recursos Humanos"),
+        ("Carlos Mendes", "carlos.mendes@empresa.pt", "1234", "gestor", "Tecnologia & Desenvolvimento", 22, "#3B82F6", "Lead Developer / Gestor TI"),
+        ("Ana Silva", "ana.silva@empresa.pt", "1234", "colaborador", "Tecnologia & Desenvolvimento", 22, "#6366F1", "Engenheira de Software Frontend"),
+        ("João Santos", "joao.santos@empresa.pt", "1234", "colaborador", "Tecnologia & Desenvolvimento", 22, "#14B8A6", "Engenheiro de Software Backend"),
+        ("Marta Ferreira", "marta.ferreira@empresa.pt", "1234", "gestor", "Vendas & Marketing", 22, "#F59E0B", "Gestora de Marketing"),
+        ("Pedro Oliveira", "pedro.oliveira@empresa.pt", "1234", "colaborador", "Vendas & Marketing", 22, "#8B5CF6", "Designer de Produto"),
+        ("Inês Costa", "ines.costa@empresa.pt", "1234", "colaborador", "Financeiro & Operações", 22, "#10B981", "Analista Financeira")
     ]
     for u in users:
+        name, email, password, role, department_name, days, avatar, title = u
         cursor.execute(convert_query_for_engine("""
         INSERT INTO users (name, email, password, role, department_id, total_vacation_days, avatar_color, job_title)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """), u)
+        """), (name, email, password, role, department_ids[department_name], days, avatar, title))
 
     holidays = [
         ("2026-01-01", "Ano Novo", 1),
@@ -208,18 +222,5 @@ def seed_data(cursor, conn):
             cursor.execute(convert_query_for_engine("INSERT INTO holidays (date, name, is_national) VALUES (?, ?, ?) ON CONFLICT (date) DO NOTHING"), h)
         else:
             cursor.execute("INSERT OR IGNORE INTO holidays (date, name, is_national) VALUES (?, ?, ?)", h)
-
-    sample_requests = [
-        (3, "ferias", "2026-07-13", "2026-07-24", 10, "aprovado", "Férias de Verão", "Aprovado. Bom descanso!", 2),
-        (4, "ferias", "2026-07-20", "2026-07-31", 10, "pendente", "Férias com a família", None, None),
-        (3, "ferias", "2026-12-21", "2026-12-31", 8, "pendente", "Época Festiva de Natal", None, None),
-        (6, "ferias", "2026-08-03", "2026-08-14", 10, "aprovado", "Férias de Agosto", "Aprovado!", 5),
-        (7, "baixa", "2026-02-02", "2026-02-04", 3, "aprovado", "Consulta e recuperação", "Registado.", 1)
-    ]
-    for sr in sample_requests:
-        cursor.execute(convert_query_for_engine("""
-        INSERT INTO leave_requests (user_id, type, start_date, end_date, business_days, status, reason, manager_comment, approved_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """), sr)
 
     conn.commit()
