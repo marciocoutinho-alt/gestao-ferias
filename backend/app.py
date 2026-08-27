@@ -89,7 +89,7 @@ def get_current_user_from_db(user_id: int):
     SELECT u.*, d.name as department_name, d.color as department_color
     FROM users u
     LEFT JOIN departments d ON u.department_id = d.id
-    WHERE u.id = ? AND (u.is_active = TRUE OR u.is_active = 1)
+    WHERE u.id = ? AND u.is_active = TRUE
     """), (user_id,))
     user = cursor.fetchone()
     conn.close()
@@ -115,7 +115,7 @@ def login(credentials: UserLogin, response: Response):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(convert_query_for_engine("""
-    SELECT * FROM users WHERE email = ? AND (is_active = TRUE OR is_active = 1)
+    SELECT * FROM users WHERE email = ? AND is_active = TRUE
     """), (credentials.email.strip().lower(),))
     user = cursor.fetchone()
     conn.close()
@@ -155,7 +155,7 @@ def list_users():
            d.name as department_name, d.color as department_color
     FROM users u
     LEFT JOIN departments d ON u.department_id = d.id
-    WHERE u.is_active = TRUE OR u.is_active = 1
+    WHERE u.is_active = TRUE
     ORDER BY u.name ASC
     """)
     users = [dict(row) for row in cursor.fetchall()]
@@ -257,7 +257,7 @@ def list_departments():
     cursor.execute("""
     SELECT d.*, COUNT(u.id) as members_count
     FROM departments d
-    LEFT JOIN users u ON u.department_id = d.id AND (u.is_active = TRUE OR u.is_active = 1)
+    LEFT JOIN users u ON u.department_id = d.id AND u.is_active = TRUE
     GROUP BY d.id, d.name, d.color, d.created_at
     ORDER BY d.name ASC
     """)

@@ -143,7 +143,7 @@ def get_dashboard_stats(current_user_id: int, role: str, department_id: int = No
     cursor = conn.cursor()
     today_str = date.today().strftime("%Y-%m-%d")
 
-    cursor.execute("SELECT COUNT(*) as total FROM users WHERE is_active = TRUE OR is_active = 1")
+    cursor.execute("SELECT COUNT(*) as total FROM users WHERE is_active = TRUE")
     row_t = cursor.fetchone()
     total_users = dict(row_t).get("total", 0) if row_t else 0
 
